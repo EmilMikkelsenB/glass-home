@@ -18,7 +18,7 @@ Screenshots taken on the TV (1920×1080). The UI follows the TV's language (Swed
 
 | Path | What |
 |---|---|
-| `src/se/glass/home/` | `MainActivity` (home screen, folder, Home Assistant panel), `HomeAssistant` (REST client), `KeyService` (button remapping, accessibility service), `Glass` (glass drawing) |
+| `src/se/glass/home/` | `MainActivity` (home screen, folder, panels, Jellyfin row), `HomeAssistant` / `Jellyfin` (REST clients), `Updater` + `InstallReceiver` (self-update from releases), `KeyService` (button remapping, accessibility service), `Glass` / `Poster` (drawing) |
 | `res-src/` | hand-written resources (accessibility config, strings) |
 | `artwork/make_assets.py` | generates glass icons, banners, wide buttons and wallpapers into `artwork/out/` (`APPS` = name, fallback glyph, brand colour) |
 | `artwork/fetch_logos.py` | downloads wallpapers + Simple Icons logos, and pulls the rest from app APKs, into `artwork/logos/` |
@@ -43,5 +43,18 @@ bash make-share.sh                  # → share/ + glass-home-share.zip
 
 ## Config on the TV
 
-`/sdcard/Android/data/se.glass.home/files/`: `ha.json` (HA URL, token, tiles, chips, names), `buttons.json` (remote buttons),
-`favorites.json` (front-row apps). See the `*.example.json` files. The installer copies any of these that sit next to it.
+`/sdcard/Android/data/se.glass.home/files/`, see the `*.example.json` files. The installer copies any of these that sit next to it:
+
+| File | Enables |
+|---|---|
+| `ha.json` | Hemmet panel: HA URL, token, tiles, chips, display names |
+| `jellyfin.json` | "Fortsätt titta" row (resume + next up), opens items directly in the Jellyfin app |
+| `update.json` | self-update: the home screen shows "Uppdatering finns" when a newer GitHub release exists (token: fine-grained, this repo, Contents read-only) |
+| `buttons.json` | remote-button remapping |
+| `favorites.json` | front-row apps |
+
+## Releases and updates
+
+Every push to `main` builds and publishes a release (`.github/workflows/release.yml`). It needs the repo secret `KEYSTORE_B64`
+(base64 of `debug.keystore`) so releases are signed with the same key and install over older builds. Each release's notes
+carry `versionCode=N`, and the TV compares that against its installed version.

@@ -24,6 +24,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Version code (minutes since 1970, same scheme as local builds)
+        run: echo "VERSION_CODE=$(( $(date +%s) / 60 ))" >> "$GITHUB_ENV"
+
       - uses: actions/setup-java@v4
         with:
           distribution: microsoft
@@ -74,4 +77,6 @@ jobs:
           gh release create "v$VERSION_NAME" glass-home.apk glass-home-share.zip \
             --title "Glass Home $VERSION_NAME" \
             --generate-notes \
-            --notes "Install: download **glass-home-share.zip**, unzip, double-click \`install-glass-home.bat\` (see README). Already installed? Run the installer again: settings are kept."
+            --notes "Install: download **glass-home-share.zip**, unzip, double-click \`install-glass-home.bat\` (see README). Already installed? The TV shows \"Uppdatering finns\" on its home screen, or run the installer again: settings are kept.
+
+          <!-- versionCode=$VERSION_CODE (read by the TV's updater) -->"

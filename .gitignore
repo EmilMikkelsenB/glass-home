@@ -15,5 +15,7 @@ artwork/out/
 artwork/src/
 __pycache__/
 
-# TV config with a Home Assistant token: never commit
+# TV configs with tokens/keys: never commit
 ha.json
+jellyfin.json
+update.json

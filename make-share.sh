@@ -3,6 +3,6 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 rm -rf share glass-home-share.zip && mkdir share
-cp glass-home.apk install-glass-home.bat uninstall-glass-home.bat ha.example.json buttons.example.json favorites.example.json share/
+cp glass-home.apk install-glass-home.bat uninstall-glass-home.bat ./*.example.json share/
 python -c "import shutil; shutil.make_archive('glass-home-share', 'zip', 'share')"
 echo "share/ and glass-home-share.zip ready"

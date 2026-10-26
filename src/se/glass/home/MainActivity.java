@@ -99,6 +99,16 @@ public class MainActivity extends Activity {
     private LinearLayout chips;
     private View returnFocus;
     private Runnable panelRefresh, chipRefresh;
+    private final ExecutorService images = Executors.newFixedThreadPool(3);
+    private FrameLayout root;
+    private Jellyfin jf;
+    private boolean mediaEmpty;          // Jellyfin has nothing to resume: use the roomy layout without the row
+    private LinearLayout mediaRow;
+    private long mediaFetchedAt;
+    private Updater updater;
+    private Updater.Release pendingUpdate;
+    private TextView updatePill;
+    private long updateCheckedAt;
 
     private int px(float v) {
         return Math.round(v * W / 1920f);
@@ -112,8 +122,10 @@ public class MainActivity extends Activity {
         pm = getPackageManager();
         semibold = Typeface.create(Typeface.DEFAULT, 600, false);
         ha = HomeAssistant.load(this);
+        jf = Jellyfin.load(this);
+        updater = Updater.load(this);
 
-        FrameLayout root = new FrameLayout(this);
+        root = new FrameLayout(this);
         wall = new ImageView(this);
         wall.setScaleType(ImageView.ScaleType.CENTER_CROP);
         wall.setImageBitmap(asset("wallpaper.jpg"));
@@ -148,6 +160,8 @@ public class MainActivity extends Activity {
             };
             ui.post(chipRefresh);
         }
+        refreshMedia();
+        checkUpdate();
     }
 
     @Override
@@ -176,19 +190,43 @@ public class MainActivity extends Activity {
     private FrameLayout buildHome() {
         FrameLayout f = new FrameLayout(this);
         f.setClipChildren(false);
+        boolean media = jf != null && !mediaEmpty;   // a Jellyfin row below: move clock and apps up
+        if (media) {   // darken the lower half so labels stay readable on bright wallpapers
+            View scrim = new View(this);
+            scrim.setBackground(new android.graphics.drawable.GradientDrawable(
+                    android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM, new int[]{0, 0x40000000, 0x8C000000}));
+            FrameLayout.LayoutParams sp = new FrameLayout.LayoutParams(-1, -1);
+            sp.topMargin = px(300);
+            f.addView(scrim, sp);
+        }
 
         TextClock date = new TextClock(this);
         date.setFormat24Hour("EEEE d MMMM");
         date.setFormat12Hour("EEEE d MMMM");
-        style(date, px(40), semibold, 0.85f);
-        f.addView(date, top(px(122)));
+        style(date, px(media ? 34 : 40), semibold, 0.85f);
+        f.addView(date, top(px(media ? 56 : 122)));
 
         TextClock time = new TextClock(this);
         time.setFormat24Hour("HH:mm");
         time.setFormat12Hour("HH:mm");
-        style(time, px(250), semibold, 0.9f);
+        style(time, px(media ? 180 : 250), semibold, 0.9f);
         time.setIncludeFontPadding(false);
-        f.addView(time, top(px(170)));
+        f.addView(time, top(px(media ? 96 : 170)));
+
+        updatePill = new TextView(this);
+        style(updatePill, px(26), semibold, 0.95f);
+        updatePill.setPadding(px(26), px(12), px(26), px(12));
+        updatePill.setBackground(new Glass(null, 0xFF0A84FF, true, 0.5f));   // iOS blue
+        updatePill.setFocusable(true);
+        updatePill.setVisibility(View.GONE);
+        updatePill.setOnClickListener(x -> installUpdate());
+        updatePill.setOnFocusChangeListener((x, focused) ->
+                updatePill.animate().scaleX(focused ? 1.1f : 1f).scaleY(focused ? 1.1f : 1f).setDuration(160).start());
+        FrameLayout.LayoutParams up = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START);
+        up.topMargin = px(48);
+        up.leftMargin = px(60);
+        f.addView(updatePill, up);
+        if (pendingUpdate != null) showUpdate(pendingUpdate);
 
         chips = new LinearLayout(this);
         chips.setGravity(Gravity.END);
@@ -198,7 +236,7 @@ public class MainActivity extends Activity {
         cp.rightMargin = px(60);
         f.addView(chips, cp);
 
-        int count = (ha != null ? 2 : 1);
+        int count = ha != null ? 2 : 1;
         for (String pkg : favourites()) if (installed(pkg)) count++;
         // cards have transparent sides: overlap them like the preview (step = 252/320 of a card), shrink when many
         int cw = Math.min(px(320), Math.round((W - px(120)) / (1 + (count - 1) * 0.7875f))), ch = cw * 9 / 16;
@@ -216,10 +254,153 @@ public class MainActivity extends Activity {
             if (i > 0) lp.leftMargin = -overlap;
             row.addView(cards.get(i), lp);
         }
-        f.addView(row, top(px(640)));
+        f.addView(row, top(px(media ? 360 : 640)));
+
+        mediaRow = null;
+        if (media) {
+            TextView title = new TextView(this);
+            title.setText(tr("Fortsätt titta", "Continue watching"));
+            style(title, px(34), semibold, 0.95f);
+            FrameLayout.LayoutParams tp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START);
+            tp.topMargin = px(600);
+            tp.leftMargin = px(100);
+            f.addView(title, tp);
+            mediaRow = new LinearLayout(this);
+            mediaRow.setClipChildren(false);
+            mediaRow.setClipToPadding(false);
+            mediaRow.setPadding(px(100), px(20), px(100), px(20));
+            android.widget.HorizontalScrollView hs = new android.widget.HorizontalScrollView(this);
+            hs.setHorizontalScrollBarEnabled(false);
+            hs.setClipChildren(false);
+            hs.setClipToPadding(false);
+            hs.addView(mediaRow);
+            FrameLayout.LayoutParams hp = new FrameLayout.LayoutParams(-1, -2, Gravity.TOP);
+            hp.topMargin = px(640);
+            f.addView(hs, hp);
+        }
         View first = cards.get(0);
         first.post(first::requestFocus);
         return f;
+    }
+
+    /** Swaps in a freshly built home screen, e.g. when the Jellyfin row appears or disappears. */
+    private void rebuildHome() {
+        int i = root.indexOfChild(home);
+        root.removeView(home);
+        home = buildHome();
+        root.addView(home, i, match());
+        if (overlay.getVisibility() == View.VISIBLE) home.setAlpha(0f);
+    }
+
+    // ---- Jellyfin: continue watching ------------------------------------------
+    private void refreshMedia() {
+        if (jf == null || System.currentTimeMillis() - mediaFetchedAt < 30_000) return;
+        mediaFetchedAt = System.currentTimeMillis();
+        io.execute(() -> {
+            List<Jellyfin.Item> items;
+            try {
+                items = jf.continueWatching();
+            } catch (Exception e) {
+                android.util.Log.w("GlassHome", "jellyfin", e);
+                items = new ArrayList<>();   // server down: same as nothing to resume
+            }
+            List<Jellyfin.Item> list = items;
+            runOnUiThread(() -> bindMedia(list));
+        });
+    }
+
+    private void bindMedia(List<Jellyfin.Item> items) {
+        if (items.isEmpty() != mediaEmpty) {
+            mediaEmpty = items.isEmpty();
+            rebuildHome();
+        }
+        if (mediaRow == null) return;
+        boolean hadFocus = mediaRow.hasFocus();
+        mediaRow.removeAllViews();
+        int mw = px(352), mh = mw * 9 / 16;
+        for (Jellyfin.Item it : items) {
+            View v = mediaCard(it, mw, mh);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(mw, -2);
+            lp.rightMargin = px(28);
+            mediaRow.addView(v, lp);
+        }
+        if (hadFocus && mediaRow.getChildCount() > 0) mediaRow.getChildAt(0).requestFocus();
+    }
+
+    private View mediaCard(Jellyfin.Item it, int mw, int mh) {
+        LinearLayout v = new LinearLayout(this);
+        v.setOrientation(LinearLayout.VERTICAL);
+        v.setFocusable(true);
+        v.setClipChildren(false);
+        Poster poster = new Poster(it.progress);
+        ImageView img = new ImageView(this);
+        img.setImageDrawable(poster);
+        v.addView(img, new LinearLayout.LayoutParams(mw, mh));
+        boolean episode = it.type.equals("Episode");
+        TextView title = new TextView(this);
+        title.setText(episode ? it.series : it.name);
+        style(title, px(26), semibold, 0.95f);
+        title.setSingleLine();
+        title.setEllipsize(TextUtils.TruncateAt.END);
+        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(mw, -2);
+        tp.topMargin = px(12);
+        v.addView(title, tp);
+        TextView sub = new TextView(this);
+        String where = episode ? "S" + it.season + " E" + it.episode + " · " + it.name : (it.year > 0 ? String.valueOf(it.year) : "");
+        String when = it.nextUp ? tr("Nästa: ", "Next: ")
+                : it.progress > 0 ? tr(it.remainingMin + " min kvar · ", it.remainingMin + " min left · ") : "";
+        sub.setText(when + where);
+        style(sub, px(22), Typeface.DEFAULT, 0.75f);
+        sub.setSingleLine();
+        sub.setEllipsize(TextUtils.TruncateAt.END);
+        v.addView(sub, new LinearLayout.LayoutParams(mw, -2));
+        v.setOnClickListener(x -> startActivity(new Intent().setClassName(Jellyfin.APP, Jellyfin.STARTUP)
+                .putExtra("ItemId", it.id).putExtra("ItemIsUserView", false).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)));
+        v.setOnFocusChangeListener((x, focused) -> {
+            float s = focused ? 1.08f : 1f;
+            img.animate().scaleX(s).scaleY(s).setDuration(160).start();
+            v.setZ(focused ? 1 : 0);
+        });
+        images.execute(() -> {
+            Bitmap bm = jf.image(it, 480);
+            if (bm != null) runOnUiThread(() -> poster.setBitmap(bm));
+        });
+        return v;
+    }
+
+    // ---- self-update -----------------------------------------------------------
+    private void checkUpdate() {
+        if (updater == null || System.currentTimeMillis() - updateCheckedAt < 6 * 3600_000L) return;
+        updateCheckedAt = System.currentTimeMillis();
+        io.execute(() -> {
+            try {
+                Updater.Release rel = updater.latest();
+                long mine = pm.getPackageInfo(getPackageName(), 0).getLongVersionCode();
+                if (rel != null && rel.versionCode > mine) runOnUiThread(() -> showUpdate(rel));
+            } catch (Exception e) {
+                android.util.Log.w("GlassHome", "update check", e);
+            }
+        });
+    }
+
+    private void showUpdate(Updater.Release rel) {
+        pendingUpdate = rel;
+        updatePill.setText(tr("Uppdatering finns · tryck här", "Update available · press here"));
+        updatePill.setVisibility(View.VISIBLE);
+    }
+
+    private void installUpdate() {
+        Updater.Release rel = pendingUpdate;
+        if (rel == null) return;
+        updatePill.setText(tr("Laddar ner…", "Downloading…"));
+        io.execute(() -> {
+            try {
+                Updater.install(this, updater.download(rel, getExternalCacheDir()));
+            } catch (Exception e) {
+                android.util.Log.w("GlassHome", "update install", e);
+                runOnUiThread(() -> updatePill.setText(tr("Uppdateringen misslyckades · försök igen", "Update failed · try again")));
+            }
+        });
     }
 
     /** Front-row packages: files/favorites.json (a JSON array of package names) if present, else FAVOURITES. */

@@ -1,0 +1,5 @@
+{
+  "url": "http://192.168.1.90:8096",
+  "apiKey": "PASTE-JELLYFIN-API-KEY (Dashboard > API Keys)",
+  "userId": "PASTE-USER-ID (Dashboard > Users > user > the id in the address bar)"
+}
