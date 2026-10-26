@@ -9,7 +9,10 @@ SDK="${GLASS_SDK:-$USERPROFILE/Android/sdk}"
 BT="$SDK/build-tools/35.0.0"
 JAR="$SDK/platforms/android-35/android.jar"
 ART="artwork/out"
-PATH="$JAVA_HOME/bin:$PATH"
+PATH="$(cygpath -u "$JAVA_HOME")/bin:$PATH"
+# minutes since 1970: always increases, so any newer build (local or CI) installs over an older one
+VERSION_CODE="${VERSION_CODE:-$(( $(date +%s) / 60 ))}"
+VERSION_NAME="${VERSION_NAME:-dev-$(date +%Y%m%d-%H%M)}"
 
 # artwork from artwork/ (python artwork/make_assets.py)
 rm -rf build assets res && mkdir -p build/classes build/dex build/gen assets res/drawable
@@ -21,7 +24,8 @@ cp "$ART/banners/more.png" res/drawable/banner.png
 
 "$BT/aapt2.exe" compile --dir res -o build/res.zip
 "$BT/aapt2.exe" link -I "$JAR" --manifest AndroidManifest.xml -A assets build/res.zip \
-    --java build/gen --min-sdk-version 31 --target-sdk-version 34 -o build/unsigned.apk
+    --java build/gen --min-sdk-version 31 --target-sdk-version 34 -o build/unsigned.apk \
+    --version-code "$VERSION_CODE" --version-name "$VERSION_NAME"
 javac -nowarn -source 11 -target 11 -encoding UTF-8 -classpath "$JAR" -d build/classes \
     $(find src build/gen -name '*.java')
 "$BT/d8.bat" --min-api 31 --lib "$JAR" --output build/dex $(find build/classes -name '*.class')

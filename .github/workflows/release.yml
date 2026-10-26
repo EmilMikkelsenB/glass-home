@@ -1,0 +1,77 @@
+# Every push to main: build artwork + APK on Windows (same toolchain as locally) and publish a GitHub release.
+name: Build and release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    env:
+      VERSION_NAME: 1.0.${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: microsoft
+          java-version: '17'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Python packages
+        run: python -m pip install --quiet pillow numpy svgelements==1.9.6
+
+      - name: Android SDK packages
+        run: |
+          SDKM="$(cygpath -u "$ANDROID_HOME")/cmdline-tools/latest/bin/sdkmanager.bat"
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" "build-tools;35.0.0" "platforms;android-35" > /dev/null
+          echo "GLASS_SDK=$(cygpath -u "$ANDROID_HOME")" >> "$GITHUB_ENV"
+
+      - name: Signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then echo "::error::KEYSTORE_B64 secret missing"; exit 1; fi
+          echo "$KEYSTORE_B64" | base64 -d > debug.keystore
+
+      - name: Artwork (wallpapers, logos, glass buttons)
+        run: |
+          python artwork/fetch_logos.py
+          python artwork/make_assets.py
+
+      - name: Build APK + share zip
+        run: |
+          bash build.sh
+          bash make-share.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: glass-home-${{ env.VERSION_NAME }}
+          path: |
+            glass-home.apk
+            glass-home-share.zip
+
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v$VERSION_NAME" glass-home.apk glass-home-share.zip \
+            --title "Glass Home $VERSION_NAME" \
+            --generate-notes \
+            --notes "Install: download **glass-home-share.zip**, unzip, double-click \`install-glass-home.bat\` (see README). Already installed? Run the installer again: settings are kept."
