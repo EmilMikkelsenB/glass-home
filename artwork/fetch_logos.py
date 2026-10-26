@@ -90,8 +90,11 @@ def main():
     src.mkdir(exist_ok=True)
     for name, url in WALLPAPERS.items():
         if not (src / name).exists():
-            urllib.request.urlretrieve(url, src / name)
-            print("wallpaper", name)
+            try:  # optional: the APK ships the gradient; 512pixels answers 403 to CI runners
+                urllib.request.urlretrieve(url, src / name)
+                print("wallpaper", name)
+            except OSError as e:
+                print("skip wallpaper", name, e)
     LOGOS.mkdir(exist_ok=True)
     for key, slug in SIMPLE.items():
         svg = urllib.request.urlopen(SI.format(slug)).read().decode()
