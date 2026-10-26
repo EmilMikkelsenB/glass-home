@@ -1,60 +1,96 @@
 # Glass Home
 
-A home screen (launcher) for Chromecast with Google TV / Google TV Streamer: iOS 26 "Liquid Glass" style, big centred clock,
-real app logos on brand-coloured glass, an app folder with a blurred background, Home Assistant scenes/lights/sensors, and
-remote-button remapping. No ads, no recommendations. Plain Java, built without Gradle.
-
-Private project. The wallpaper (macOS Sierra) and logos belong to Apple and the app makers. Don't publish builds.
+A home screen for **Chromecast with Google TV** and **Google TV Streamer**, in the style of iOS 26 "Liquid Glass". No ads, no
+recommendations: just your apps, a big clock, your films and your home.
 
 ![Home screen](docs/screenshots/home.jpg)
 
-| Hemmet (Home Assistant) | Fler appar (all other apps) |
+| Press down: Continue watching + Recently added | Home Assistant panel |
 |---|---|
-| ![Hemmet](docs/screenshots/hemmet.jpg) | ![Fler appar](docs/screenshots/fler-appar.jpg) |
+| ![Rows](docs/screenshots/expanded.jpg) | ![Hemmet](docs/screenshots/hemmet.jpg) |
 
-Screenshots taken on the TV (1920×1080). The UI follows the TV's language (Swedish here).
-
-## Layout
-
-| Path | What |
+| First-run setup: pick favourites | Teach it your remote's buttons |
 |---|---|
-| `src/se/glass/home/` | `MainActivity` (home screen, folder, panels, Jellyfin row), `HomeAssistant` / `Jellyfin` (REST clients), `Updater` + `InstallReceiver` (self-update from releases), `KeyService` (button remapping, accessibility service), `Glass` / `Poster` (drawing) |
-| `res-src/` | hand-written resources (accessibility config, strings) |
-| `artwork/make_assets.py` | generates glass icons, banners, wide buttons and wallpapers into `artwork/out/` (`APPS` = name, fallback glyph, brand colour) |
-| `artwork/fetch_logos.py` | downloads wallpapers + Simple Icons logos, and pulls the rest from app APKs, into `artwork/logos/` |
-| `build.sh` | builds `glass-home.apk` (aapt2 → javac → d8 → zipalign → apksigner) |
-| `make-share.sh` | friend-safe `share/` + zip (APK, installer, examples, no token) |
-| `install-glass-home.bat` / `uninstall-glass-home.bat` | double-click installer / undo for Windows |
-| `tools/googletv-restore.ps1` | re-enables the Google apps removed during the debloat |
-| `*.example.json` | templates for the TV config files |
+| ![Favourites](docs/screenshots/favourites.jpg) | ![Buttons](docs/screenshots/buttons.jpg) |
+
+Screenshots are from demo mode (fake data) on the built-in wallpaper.
+
+## Features
+
+- **Calm by default:** clock, date and your favourite apps. Press **down** and the clock moves aside for more rows.
+- **Smooth motion:** spring physics everywhere, Apple TV-style card lift (tilt, light sheen, shadow), fixed-focus scrolling,
+  wallpaper parallax, panels that zoom out of the button you pressed, rolling clock digits.
+- **First-run setup on the TV:** choose and order favourites from all installed apps (the rest go to "More apps", or hide them),
+  teach it what remote buttons do (mic, Netflix, YouTube… → open an app, a panel, a Home Assistant scene, play/pause; separate
+  short and long press), choose a wallpaper.
+- **Jellyfin:** "Continue watching" and "Recently added" rows. The background turns into the film's backdrop while you browse.
+  Switch Jellyfin profile per household member.
+- **Home Assistant:** scenes and lights grouped by room, updated live over the WebSocket API. Hold a light for brightness (◀ ▶).
+  Weather in the corner, "now playing" from any media player, and notifications from automations (see below).
+- **Wallpapers:** a built-in glass gradient, or macOS Sierra / Tahoe / Tahoe beach that follows the time of day, downloaded on
+  the TV from 512pixels.net when chosen (not bundled).
+- **Screensaver:** the big clock over a slow Ken Burns pan through your Jellyfin backdrops.
+- **Set up from your phone:** the TV shows a QR code to a small form for the Home Assistant / Jellyfin connection (LAN only,
+  random port + PIN, runs only while that screen is open).
+- **Updates itself:** when a new release is published here, the home screen shows "New version", with the release notes.
+- Long-press any card: move it (it wiggles; ◀ ▶), remove, hide. Languages: Swedish and English, following the TV.
+
+## Install
+
+You need a Windows PC on the same network as the TV.
+
+1. On the TV: **Settings → System → About**, click **Android TV OS build** 7 times. Then **Settings → System → Developer options**:
+   turn on **USB debugging** and **Wireless debugging**, open Wireless debugging → **Pair device with pairing code**.
+2. Download **glass-home-share.zip** from the newest [release](../../releases), unzip it, double-click **install-glass-home.bat**
+   and type what the TV shows.
+3. Press **Home**. The setup guide starts.
+
+`uninstall-glass-home.bat` brings the normal Google TV home screen back.
+
+The installer disables the Google TV launcher (plus the setup helper that would re-enable it), makes Glass Home the home app,
+enables its button service and screensaver, and lets it install its own updates. Cast and everything else keep working.
+
+## Home Assistant notifications
+
+Any automation can pop up a glass notification on the TV:
+
+```yaml
+action: event.fire          # or in the UI: "Fire event"
+data:
+  event_type: glass_home_notify
+  event_data:
+    title: Washing machine
+    message: The laundry is done
+```
 
 ## Build
 
-Needs JDK 17, Android SDK build-tools 35.0.0 + platform android-35 (default `%USERPROFILE%\Android\sdk`, override with `GLASS_SDK`),
-Python 3 with Pillow, numpy, svgelements. Run in Git Bash:
+Plain Java, no Gradle or AndroidX. Needs JDK 17, Android SDK build-tools 35.0.0 + platform android-35
+(default `%USERPROFILE%\Android\sdk`, override with `GLASS_SDK`), Python 3 with Pillow, numpy, svgelements. In Git Bash:
 
 ```bash
-python artwork/fetch_logos.py <dir with app APKs pulled from the TV>   # once; without APKs only Simple Icons logos are fetched
-python artwork/make_assets.py
-bash build.sh                       # → glass-home.apk (creates debug.keystore on first run)
-bash build.sh --install <tv-ip:port>   # also installs, sets it as Home, restarts it
-bash make-share.sh                  # → share/ + glass-home-share.zip
+python artwork/fetch_logos.py [dir with app APKs]   # brand logos (Simple Icons; APK images for the rest)
+python artwork/make_assets.py                       # glass buttons + gradient wallpaper
+bash build.sh                                       # → glass-home.apk (LINT=1: warnings are errors)
+bash build.sh --install <device>                    # also installs + makes it the home app
+bash make-share.sh                                  # → share/ + glass-home-share.zip
 ```
 
-## Config on the TV
-
-`/sdcard/Android/data/se.glass.home/files/`, see the `*.example.json` files. The installer copies any of these that sit next to it:
-
-| File | Enables |
+| Path | What |
 |---|---|
-| `ha.json` | Hemmet panel: HA URL, token, tiles, chips, display names |
-| `jellyfin.json` | "Fortsätt titta" row (resume + next up), opens items directly in the Jellyfin app |
-| `update.json` | self-update: the home screen shows "Uppdatering finns" when a newer GitHub release exists (token: fine-grained, this repo, Contents read-only) |
-| `buttons.json` | remote-button remapping |
-| `favorites.json` | front-row apps |
+| `src/se/glass/home/MainActivity.java` | home screen, panels, menus, move mode |
+| `HomeView`, `RowView`, `CardView`, `Motion`, `RollingClock` | layout, fixed-focus rows, card lift, springs |
+| `SetupActivity`, `Settings`, `Apps` | first-run wizard, on-TV settings, app scanning |
+| `KeyService` | remote-button remapping (accessibility service) |
+| `HomeAssistant`, `HaLive`, `Tiles` | REST + live WebSocket client, tiles |
+| `Jellyfin`, `Poster`, `Cache` | rows, artwork, offline cache |
+| `Wallpapers`, `Blur`, `GlassDream` | wallpapers, frosted panels, screensaver |
+| `PhoneSetup`, `Qr` | phone setup page + QR code |
+| `Updater`, `InstallReceiver` | self-update from GitHub releases |
+| `Demo` | demo mode (`Home screen → Demo mode`) |
 
-## Releases and updates
+Every push to `main` builds a release (`.github/workflows/release.yml`); pull requests get a build check. Releases are signed with
+the key in the `KEYSTORE_B64` secret so they install over earlier versions.
 
-Every push to `main` builds and publishes a release (`.github/workflows/release.yml`). It needs the repo secret `KEYSTORE_B64`
-(base64 of `debug.keystore`) so releases are signed with the same key and install over older builds. Each release's notes
-carry `versionCode=N`, and the TV compares that against its installed version.
+Brand logos are trademarks of their owners and are used only to label the apps you already have installed. macOS wallpapers are
+© Apple and are never included in this repo or the APK.

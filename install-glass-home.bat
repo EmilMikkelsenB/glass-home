@@ -40,6 +40,9 @@ adb -s %TV% shell cmd package set-home-activity se.glass.home/.MainActivity
 rem remote-button remapping (buttons.json); replaces other accessibility services such as Projectivy's
 adb -s %TV% shell settings put secure enabled_accessibility_services se.glass.home/se.glass.home.KeyService
 adb -s %TV% shell settings put secure accessibility_enabled 1
+rem Glass Home's own screensaver (big clock over film backdrops / the wallpaper)
+adb -s %TV% shell settings put secure screensaver_components se.glass.home/.GlassDream
+adb -s %TV% shell settings put secure screensaver_enabled 1
 rem lets Glass Home install its own updates (the TV still asks before each one)
 adb -s %TV% shell appops set se.glass.home REQUEST_INSTALL_PACKAGES allow
 rem optional config files placed next to this script are copied to the TV

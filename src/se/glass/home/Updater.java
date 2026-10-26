@@ -27,11 +27,12 @@ import java.util.regex.Pattern;
 /**
  * Self-update from GitHub releases (made by .github/workflows/release.yml). Config on the TV:
  * /sdcard/Android/data/se.glass.home/files/update.json
- * {"repo": "EmilMikkelsenB/glass-home", "token": "<fine-grained token: this repo, Contents read-only>"}
+ * {"repo": "EmilMikkelsenB/glass-home", "token": "<only for private repos: fine-grained, Contents read-only>"}
+ * Without the file the public repo is used, no token needed.
  */
 final class Updater {
     static final class Release {
-        String name;
+        String name, notes = "";
         long versionCode, assetId;
     }
 
@@ -42,9 +43,10 @@ final class Updater {
         this.token = token;
     }
 
-    static Updater load(Context c) {
+    /** update.json if present (e.g. a private fork with a token), else the public repo without a token. */
+    static Updater load(Context c, String defaultRepo) {
         File f = new File(c.getExternalFilesDir(null), "update.json");
-        if (!f.exists()) return null;
+        if (!f.exists()) return new Updater(defaultRepo, "");
         try {
             JSONObject o = new JSONObject(new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8));
             return new Updater(o.getString("repo"), o.optString("token"));
@@ -68,6 +70,7 @@ final class Updater {
         Release rel = new Release();
         rel.name = r.optString("tag_name").replaceFirst("^v", "");
         rel.versionCode = Long.parseLong(m.group(1));
+        rel.notes = r.optString("body").replaceAll("(?s)<!--.*?-->", "").replaceAll("\\*\\*|`|#+ ", "").trim();
         JSONArray assets = r.optJSONArray("assets");
         for (int i = 0; assets != null && i < assets.length(); i++) {
             if (assets.getJSONObject(i).optString("name").equals("glass-home.apk")) rel.assetId = assets.getJSONObject(i).getLong("id");

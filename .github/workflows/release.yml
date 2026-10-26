@@ -1,16 +1,18 @@
-# Every push to main: build artwork + APK on Windows (same toolchain as locally) and publish a GitHub release.
+# Pull requests: build check only. Pushes to main: build artwork + APK on Windows (same toolchain as locally) and publish a
+# GitHub release that TVs pick up through their "Ny version" notice.
 name: Build and release
 
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: release
+  group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -21,6 +23,7 @@ jobs:
         shell: bash
     env:
       VERSION_NAME: 1.0.${{ github.run_number }}
+      LINT: 1
     steps:
       - uses: actions/checkout@v4
 
@@ -47,13 +50,14 @@ jobs:
           echo "GLASS_SDK=$(cygpath -u "$ANDROID_HOME")" >> "$GITHUB_ENV"
 
       - name: Signing key
+        if: github.event_name != 'pull_request'
         env:
           KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
         run: |
           if [ -z "$KEYSTORE_B64" ]; then echo "::error::KEYSTORE_B64 secret missing"; exit 1; fi
           echo "$KEYSTORE_B64" | base64 -d > debug.keystore
 
-      - name: Artwork (wallpapers, logos, glass buttons)
+      - name: Artwork (logos, glass buttons, gradient wallpaper)
         run: |
           python artwork/fetch_logos.py
           python artwork/make_assets.py
@@ -71,12 +75,13 @@ jobs:
             glass-home-share.zip
 
       - name: GitHub release
+        if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "v$VERSION_NAME" glass-home.apk glass-home-share.zip \
             --title "Glass Home $VERSION_NAME" \
             --generate-notes \
-            --notes "Install: download **glass-home-share.zip**, unzip, double-click \`install-glass-home.bat\` (see README). Already installed? The TV shows \"Uppdatering finns\" on its home screen, or run the installer again: settings are kept.
+            --notes "Install: download **glass-home-share.zip**, unzip, double-click \`install-glass-home.bat\` (see README). Already installed? The TV shows \"Ny version\" on its home screen, or run the installer again: settings are kept.
 
           <!-- versionCode=$VERSION_CODE (read by the TV's updater) -->"

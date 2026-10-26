@@ -22,7 +22,7 @@ VERSION_NAME="${VERSION_NAME:-dev-$(date +%Y%m%d-%H%M)}"
 rm -rf build assets res && mkdir -p build/classes build/dex build/gen assets res/drawable
 cp -r res-src/* res/                      # hand-written resources (xml, values); res/ itself is generated
 for f in "$ART"/wide/*.png; do cp "$f" "assets/wide_$(basename "$f")"; done
-cp "$ART/wallpaper_sierra_1920x1080.jpg" assets/wallpaper.jpg
+cp "$ART/wallpaper_dark_1920x1080.jpg" assets/wallpaper.jpg   # neutral default; Apple wallpapers are downloaded on the TV
 cp "$ART/icons/more.png" res/drawable/icon.png
 cp "$ART/banners/more.png" res/drawable/banner.png
 
@@ -30,7 +30,9 @@ cp "$ART/banners/more.png" res/drawable/banner.png
 "$BT/aapt2.exe" link -I "$JAR" --manifest AndroidManifest.xml -A assets build/res.zip \
     --java build/gen --min-sdk-version 31 --target-sdk-version 34 -o build/unsigned.apk \
     --version-code "$VERSION_CODE" --version-name "$VERSION_NAME"
-javac -nowarn -source 11 -target 11 -encoding UTF-8 -classpath "$JAR" -d build/classes \
+# LINT=1 (CI): every compiler warning is an error (getOpacity() is a required-but-deprecated Drawable override)
+WARN="-nowarn"; [ -n "${LINT:-}" ] && WARN="-Xlint:all,-options,-deprecation -Werror"
+javac $WARN -source 11 -target 11 -encoding UTF-8 -classpath "$JAR" -d build/classes \
     $(find src build/gen -name '*.java')
 "$BT/d8.bat" --min-api 31 --lib "$JAR" --output build/dex $(find build/classes -name '*.class')
 (cd build/dex && jar uf ../unsigned.apk classes.dex)

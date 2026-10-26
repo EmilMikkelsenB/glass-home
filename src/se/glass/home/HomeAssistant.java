@@ -23,24 +23,27 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Minimal Home Assistant REST client. Config lives on the TV at
+ * Minimal Home Assistant REST client (live updates: see HaLive). Config on the TV at
  * /sdcard/Android/data/se.glass.home/files/ha.json:
  * {"url": "http://homeassistant.local:8123", "token": "<long-lived token>",
- *  "entities": ["light.living_room", ...], "chips": ["sensor.outdoor_temperature", ...]}
+ *  "entities": ["light.living_room", ...], "chips": ["weather.home", ...], "names": {"light.x": "Name"},
+ *  "media": "media_player.living"}
  */
-final class HomeAssistant {
+class HomeAssistant {
     final String url, token;
-    final List<String> entities = new ArrayList<>();   // tiles in the Home panel
+    final List<String> entities = new ArrayList<>();   // tiles in the Home panel and the quick row
     final List<String> chips = new ArrayList<>();      // small read-outs on the home screen
     final Map<String, String> names = new HashMap<>(); // optional display names, overriding HA's friendly_name
+    String media;                                      // media_player shown as "now playing"
 
-    private HomeAssistant(String url, String token) {
+    HomeAssistant(String url, String token) {
         this.url = url.replaceAll("/+$", "");
         this.token = token;
     }
 
     /** Returns null when there is no (valid) config, which hides all Home Assistant UI. */
-    static HomeAssistant load(Context c) {
+    static HomeAssistant load(Context c, Settings s) {
+        if (s.demo()) return new Demo.DemoHome();
         File f = new File(c.getExternalFilesDir(null), "ha.json");
         if (!f.exists()) return null;
         try {
@@ -53,6 +56,7 @@ final class HomeAssistant {
                 String k = it.next();
                 ha.names.put(k, names.getString(k));
             }
+            ha.media = o.optString("media", null);
             return ha;
         } catch (IOException | JSONException e) {
             Log.w("GlassHome", "bad ha.json", e);
@@ -64,12 +68,32 @@ final class HomeAssistant {
         for (int i = 0; a != null && i < a.length(); i++) out.add(a.getString(i));
     }
 
+    /** Live connection for this server (null in demo mode). */
+    HaLive live(HaLive.Listener l) {
+        return new HaLive(url, token, l);
+    }
+
     JSONObject state(String entityId) throws IOException, JSONException {
         return new JSONObject(http("GET", "/api/states/" + entityId, null));
     }
 
+    /** All states (for pickers in the setup wizard: scenes, lights). */
+    JSONArray states() throws IOException, JSONException {
+        return new JSONArray(http("GET", "/api/states", null));
+    }
+
     void call(String domain, String service, String entityId) throws IOException, JSONException {
-        http("POST", "/api/services/" + domain + "/" + service, new JSONObject().put("entity_id", entityId).toString());
+        call(domain, service, new JSONObject().put("entity_id", entityId));
+    }
+
+    void call(String domain, String service, JSONObject data) throws IOException, JSONException {
+        http("POST", "/api/services/" + domain + "/" + service, data.toString());
+    }
+
+    String display(String id, JSONObject state) {
+        JSONObject attrs = state != null ? state.optJSONObject("attributes") : null;
+        String friendly = names.containsKey(id) ? names.get(id) : attrs != null ? attrs.optString("friendly_name", id) : id;
+        return friendly.isEmpty() ? id : friendly.substring(0, 1).toUpperCase() + friendly.substring(1);
     }
 
     private String http(String method, String path, String body) throws IOException {
