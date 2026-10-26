@@ -1,0 +1,16 @@
+{
+  "url": "http://192.168.1.10:8123",
+  "token": "PASTE-LONG-LIVED-ACCESS-TOKEN-HERE",
+  "entities": [
+    "scene.movie_night",
+    "light.living_room",
+    "switch.tv_backlight",
+    "script.dim_everything"
+  ],
+  "chips": [
+    "weather.home"
+  ],
+  "names": {
+    "light.living_room": "Living room"
+  }
+}

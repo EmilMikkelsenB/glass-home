@@ -1,0 +1,19 @@
+# build output (build.sh / make-share.sh)
+build/
+assets/
+res/
+*.apk
+*.idsig
+share/
+glass-home-share.zip
+
+# signing key: keep a local backup, updates must be signed with the same key
+debug.keystore
+
+# generated artwork + downloaded Apple wallpapers (artwork/fetch_logos.py, artwork/make_assets.py)
+artwork/out/
+artwork/src/
+__pycache__/
+
+# TV config with a Home Assistant token: never commit
+ha.json

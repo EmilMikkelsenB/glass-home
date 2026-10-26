@@ -1,0 +1,12 @@
+{
+  "KEYCODE_ASSIST": {
+    "press": { "panel": "home" },
+    "long": { "scene": "scene.movie_night" }
+  },
+  "KEYCODE_PROG_RED": {
+    "press": { "app": "org.jellyfin.androidtv" }
+  },
+  "KEYCODE_BOOKMARK": {
+    "press": { "service": "light/toggle", "entity": "light.living_room" }
+  }
+}
