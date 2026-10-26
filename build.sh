@@ -11,7 +11,7 @@ JAR="$SDK/platforms/android-35/android.jar"
 ART="artwork/out"
 PATH="$(cygpath -u "$JAVA_HOME")/bin:$PATH"
 if ! command -v adb >/dev/null; then   # winget's platform-tools aren't on Git Bash's PATH
-    PT="$(ls -d "$(cygpath -u "${LOCALAPPDATA:-}")"/Microsoft/WinGet/Packages/Google.PlatformTools*/platform-tools 2>/dev/null | head -1)"
+    PT="$(ls -d "$(cygpath -u "${LOCALAPPDATA:-}")"/Microsoft/WinGet/Packages/Google.PlatformTools*/platform-tools 2>/dev/null | head -1 || true)"
     [ -n "$PT" ] && PATH="$PT:$PATH"
 fi
 # minutes since 1970: always increases, so any newer build (local or CI) installs over an older one
