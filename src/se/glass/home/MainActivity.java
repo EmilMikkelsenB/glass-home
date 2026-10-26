@@ -48,6 +48,21 @@ public class MainActivity extends Activity implements HaLive.Listener {
     private final ExecutorService images = Executors.newFixedThreadPool(3);
     private Settings settings;
     private long builtVersion = -1;
+    private boolean resumed;
+    /**
+     * Opens the setup guide once the home screen has stayed on top for a moment. Home clears the launcher task (closing the
+     * guide), so this reopens it; the delay + "still resumed" check means rapid Home presses never stack two guides.
+     */
+    private final Runnable setupCheck = () -> {
+        if (resumed && !settings.setupDone() && !SetupActivity.running) startActivity(new Intent(this, SetupActivity.class));
+    };
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        resumed = false;
+        ui.removeCallbacks(setupCheck);
+    }
 
     private HomeAssistant ha;
     private HaLive live;
@@ -126,9 +141,9 @@ public class MainActivity extends Activity implements HaLive.Listener {
     protected void onResume() {
         super.onResume();
         // Home clears the launcher task, which would close the wizard: reopen it until setup is finished
-        if (!settings.setupDone()) ui.post(() -> {
-            if (!settings.setupDone() && !SetupActivity.running) startActivity(new Intent(this, SetupActivity.class));
-        });
+        resumed = true;
+        ui.removeCallbacks(setupCheck);
+        if (!settings.setupDone()) ui.postDelayed(setupCheck, 700);
         if (settings.version() != builtVersion) {
             reload();
             loadWallpaper(true);
