@@ -262,10 +262,11 @@ public class SetupActivity extends Activity {
             lp.setMargins(Ui.px(8), Ui.px(8), Ui.px(8), Ui.px(8));
             g.addView(v, lp);
         }
-        ScrollView sv = new ScrollView(this);
-        sv.setClipChildren(false);
+        ScrollView sv = new ScrollView(this);   // clips (unlike most of our views): the grid must not draw over the footer
         sv.setVerticalScrollBarEnabled(false);
-        g.setPadding(0, Ui.px(20), 0, Ui.px(20));
+        sv.setFadingEdgeLength(Ui.px(60));
+        sv.setVerticalFadingEdgeEnabled(true);
+        g.setPadding(Ui.px(24), Ui.px(28), Ui.px(24), Ui.px(28));   // room for the focused card's lift
         sv.addView(g);
         LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-1, 0, 1f);
         sp.topMargin = Ui.px(10);
