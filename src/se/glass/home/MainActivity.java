@@ -101,7 +101,15 @@ public class MainActivity extends Activity implements HaLive.Listener {
         settings = new Settings(this);
 
         root = new FrameLayout(this);
-        wall = image(1.06f);
+        wall = new ImageView(this) {   // the glass samples this view's transform: resample when it moves
+            @Override public void setTranslationX(float x) { super.setTranslationX(x); Backdrop.SHARED.invalidateAll(); }
+            @Override public void setTranslationY(float y) { super.setTranslationY(y); Backdrop.SHARED.invalidateAll(); }
+        };
+        wall.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        wall.setScaleX(1.06f);
+        wall.setScaleY(1.06f);
+        Backdrop.SHARED.setWallView(wall);
+        Motion.onFrame = Backdrop.SHARED::invalidateAll;
         shelfA = image(1f);
         shelfB = image(1f);
         for (ImageView s : new ImageView[]{shelfA, shelfB}) {   // backdrops are bright: dim them so text stays readable
@@ -219,6 +227,10 @@ public class MainActivity extends Activity implements HaLive.Listener {
         boolean down = e.getAction() == KeyEvent.ACTION_DOWN;
         if (dimming != null) return dimKey(e);
         if (moving != null) return moveKey(e);
+        if (down && e.getRepeatCount() >= 4 && overlay.getVisibility() != View.VISIBLE
+                && (code == KeyEvent.KEYCODE_DPAD_LEFT || code == KeyEvent.KEYCODE_DPAD_RIGHT)) {
+            super.dispatchKeyEvent(e);   // held: two cards per repeat (the scroll spring keeps it smooth)
+        }
         if (code == KeyEvent.KEYCODE_BACK) {   // a launcher never goes "back"; it only closes and collapses
             if (!down) back();
             return true;
@@ -261,8 +273,8 @@ public class MainActivity extends Activity implements HaLive.Listener {
         home.chips.removeAllViews();
         if (ha != null) {
             for (String id : ha.chips) {
-                TextView chip = Ui.text(this, "", 26, true, 0.95f);
-                chip.setPadding(Ui.px(26), Ui.px(12), Ui.px(26), Ui.px(12));
+                TextView chip = Ui.text(this, "", Theme.Style.CAPTION, Theme.PRIMARY);
+                chip.setPadding(Ui.px(Theme.S3), Ui.px(12), Ui.px(Theme.S3), Ui.px(12));
                 chip.setBackground(new Glass(null, 0, true, 0.5f));
                 chip.setVisibility(View.GONE);
                 LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2);
@@ -283,17 +295,18 @@ public class MainActivity extends Activity implements HaLive.Listener {
         if (pendingUpdate != null) showUpdate(pendingUpdate);
 
         // favourites + Hemmet + Fler appar
-        favRow = new RowView(this, null, 60, true);
+        favRow = new RowView(this, null, Theme.ROW_BLEED_X, true);
         List<CardView> cards = new ArrayList<>();
         int n = (ha != null ? 2 : 1) + (settings.demo() ? Demo.APPS.length : settings.favourites().size());
-        int cw = Math.max(Ui.px(250), Math.min(Ui.px(320), Math.round((Ui.W - Ui.px(120)) / (1 + (n - 1) * 0.7875f))));
-        int ch = cw * 9 / 16;
+        int gap = Ui.px(28);
+        int cw = Math.max(Ui.px(200), Math.min(Ui.px(300), (Ui.W - 2 * Ui.px(Theme.ROW_BLEED_X) - (n - 1) * gap) / n));
+        int ch = cw * 10 / 16;
         if (settings.demo()) {
-            for (String[] a : Demo.APPS) cards.add(glassCard(Apps.artKey(this, a[0]), a[1], cw, ch, v -> toast(a[1], Ui.tr("Demoläge", "Demo mode"))));
+            for (String[] a : Demo.APPS) cards.add(appCard(Apps.iconKey(this, a[0]), a[1], cw, ch, v -> toast(a[1], Ui.tr("Demoläge", "Demo mode"))));
         } else {
             for (String pkg : settings.favourites()) {
                 if (!Apps.installed(this, pkg)) continue;
-                CardView c = glassCard(Apps.art(this, pkg), Apps.label(this, pkg), cw, ch, v -> Apps.launch(this, pkg));
+                CardView c = appCard(Apps.icon(this, pkg), Apps.label(this, pkg), cw, ch, v -> Apps.launch(this, pkg));
                 c.setTag(pkg);
                 c.setOnLongClickListener(v -> {
                     favouriteMenu((CardView) v, pkg);
@@ -302,14 +315,14 @@ public class MainActivity extends Activity implements HaLive.Listener {
                 cards.add(c);
             }
         }
-        if (ha != null) cards.add(glassCard(Apps.artKey(this, "homeassistant"), Ui.tr("Hemmet", "Home"), cw, ch, this::openHomePanel));
-        CardView more = glassCard(Apps.artKey(this, "more"), Ui.tr("Fler appar", "More apps"), cw, ch, this::openMore);
+        if (ha != null) cards.add(appCard(Apps.iconKey(this, "homeassistant"), Ui.tr("Hemmet", "Home"), cw, ch, this::openHomePanel));
+        CardView more = appCard(Apps.iconKey(this, "more"), Ui.tr("Fler appar", "More apps"), cw, ch, this::openMore);
         more.setOnLongClickListener(v -> {
             openSettings(v);
             return true;
         });
         cards.add(more);
-        favRow.setItems(cards, cw, -Math.round(cw * 0.2125f));
+        favRow.setItems(cards, cw, gap);
         favRow.listener = this::onCardFocused;
         home.addRow(favRow);
 
@@ -319,10 +332,10 @@ public class MainActivity extends Activity implements HaLive.Listener {
             latestRow = mediaRow(Ui.tr("Nyligen tillagt", "Recently added"), Cache.loadItems(this, "latest"));
         }
         if (ha != null && !ha.entities.isEmpty()) {
-            quickRow = new RowView(this, Ui.tr("Hemmet", "Home"), 100, false);
+            quickRow = new RowView(this, Ui.tr("Hemmet", "Home"), Theme.SAFE_X, false);
             List<CardView> tiles = new ArrayList<>();
-            for (String id : ha.entities) tiles.add(tileCard(id, Ui.px(300), Ui.px(150), false));
-            quickRow.setItems(tiles, Ui.px(300), Ui.px(24));
+            for (String id : ha.entities) tiles.add(tileCard(id, Ui.px(300), Ui.px(160), false));
+            quickRow.setItems(tiles, Ui.px(300), Ui.px(Theme.S4));
             quickRow.listener = this::onCardFocused;
             home.addRow(quickRow);
         }
@@ -335,7 +348,7 @@ public class MainActivity extends Activity implements HaLive.Listener {
     }
 
     private Pill pill(int tint, View.OnClickListener click) {
-        Pill p = new Pill(this, "", tint, 26);
+        Pill p = new Pill(this, "", tint, 22);
         p.setVisibility(View.GONE);
         p.setOnClickListener(click);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2);
@@ -344,17 +357,14 @@ public class MainActivity extends Activity implements HaLive.Listener {
         return p;
     }
 
-    private CardView glassCard(Drawable art, CharSequence label, int w, int h, View.OnClickListener click) {
-        ImageView img = new ImageView(this);
-        img.setImageDrawable(art);
-        img.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        CardView c = new CardView(this, img, w, h, label, null, 1.16f, true);
+    private CardView appCard(AppIcon icon, CharSequence label, int w, int h, View.OnClickListener click) {
+        CardView c = new CardView(this, icon, w, h, label, null, 1.13f, true);
         c.setOnClickListener(click);
         return c;
     }
 
     private RowView mediaRow(String title, List<Jellyfin.Item> cached) {
-        RowView row = new RowView(this, title, 100, false);
+        RowView row = new RowView(this, title, Theme.SAFE_X, false);
         row.listener = this::onCardFocused;
         home.addRow(row);
         bindItems(row, cached);
@@ -367,7 +377,7 @@ public class MainActivity extends Activity implements HaLive.Listener {
         int mw = Ui.px(352), mh = mw * 9 / 16;
         List<CardView> cards = new ArrayList<>();
         for (Jellyfin.Item it : items) cards.add(mediaCard(it, mw, mh));
-        row.setItems(cards, mw, Ui.px(28));
+        row.setItems(cards, mw, Ui.px(Theme.S4));
         row.setVisibility(items.isEmpty() ? View.GONE : View.VISIBLE);
         if (hadFocus && !items.isEmpty()) row.focusLast();
         else if (hadFocus) favRow.focusLast();
@@ -404,7 +414,7 @@ public class MainActivity extends Activity implements HaLive.Listener {
         face.bind(ha, haStates.get(id));
         faces.computeIfAbsent(id, k -> new ArrayList<>()).add(face);
         if (inPanel) panelFaces.add(face);
-        CardView c = new CardView(this, face, w, h, null, null, 1.1f, false);
+        CardView c = new CardView(this, face, w, h, null, null, 1.08f, false);
         c.ringRadius = 0.2f;   // matches the tile's glass corners
         c.setOnClickListener(v -> pressTile(face));
         if (id.startsWith("light.")) {
@@ -422,8 +432,8 @@ public class MainActivity extends Activity implements HaLive.Listener {
         int[] loc = new int[2];
         card.getLocationOnScreen(loc);
         float cx = loc[0] + card.getWidth() / 2f;
-        Motion.spring(wall, View.TRANSLATION_X, (0.5f - cx / Ui.W) * Ui.px(28), Motion.SMOOTH);
-        Motion.spring(wall, View.TRANSLATION_Y, home.expanded ? -row.rowIndex * Ui.px(10) : 0f, Motion.SMOOTH);
+        Motion.spring(wall, View.TRANSLATION_X, (0.5f - cx / Ui.W) * Ui.px(24), Motion.LAYOUT);
+        Motion.spring(wall, View.TRANSLATION_Y, home.expanded ? -row.rowIndex * Ui.px(10) : 0f, Motion.LAYOUT);
         if ((row == resumeRow || row == latestRow) && card.getTag() instanceof Jellyfin.Item) showShelf((Jellyfin.Item) card.getTag(), card);
         else hideShelf();
     }
@@ -439,6 +449,7 @@ public class MainActivity extends Activity implements HaLive.Listener {
                 ImageView next = shelfOnA ? shelfB : shelfA, prev = shelfOnA ? shelfA : shelfB;
                 shelfOnA = !shelfOnA;
                 next.setImageBitmap(bm);
+                shelfGlass(bm);
                 next.animate().alpha(1f).setDuration(600).setInterpolator(Motion.EASE).start();
                 prev.animate().alpha(0f).setDuration(600).setInterpolator(Motion.EASE).start();
             });
@@ -446,8 +457,27 @@ public class MainActivity extends Activity implements HaLive.Listener {
         ui.postDelayed(shelfTask, 250);   // only for cards you linger on, not every card you pass
     }
 
+    private android.animation.ValueAnimator shelfFade;
+    private float shelfAlpha;
+
+    /** Fade what the glass samples between the wallpaper and the frosted film image (`bm` null = back to the wallpaper). */
+    private void shelfGlass(Bitmap bm) {
+        if (shelfFade != null) shelfFade.cancel();
+        Backdrop b = Backdrop.SHARED;
+        if (bm != null) b.setShelf(Blur.frost(bm, 320, 10), 0f);
+        shelfFade = android.animation.ValueAnimator.ofFloat(bm != null ? 0f : shelfAlpha, bm != null ? 1f : 0f);
+        shelfFade.setDuration(600);
+        shelfFade.setInterpolator(Motion.EASE);
+        shelfFade.addUpdateListener(a -> {
+            shelfAlpha = (float) a.getAnimatedValue();
+            b.setShelfAlpha(shelfAlpha * 0.85f);
+        });
+        shelfFade.start();
+    }
+
     private void hideShelf() {
         ui.removeCallbacks(shelfTask);
+        if (shelfAlpha > 0) shelfGlass(null);
         shelfA.animate().alpha(0f).setDuration(500).start();
         shelfB.animate().alpha(0f).setDuration(500).start();
     }
@@ -466,7 +496,7 @@ public class MainActivity extends Activity implements HaLive.Listener {
         images.execute(() -> {
             Bitmap bm = Wallpapers.current(this, settings);
             if (bm == null) return;
-            Bitmap fr = Blur.frost(bm, 384, 10);
+            Bitmap fr = Blur.frost(bm, 480, 14);
             runOnUiThread(() -> {
                 Drawable old = wall.getDrawable();
                 if (animate && old != null) {
@@ -478,6 +508,7 @@ public class MainActivity extends Activity implements HaLive.Listener {
                     wall.setImageBitmap(bm);
                 }
                 frost.setImageBitmap(fr);
+                Backdrop.SHARED.setFrost(fr);
             });
         });
     }
@@ -656,13 +687,19 @@ public class MainActivity extends Activity implements HaLive.Listener {
         col.setOrientation(LinearLayout.VERTICAL);
         col.setGravity(Gravity.CENTER_HORIZONTAL);
         col.setClipChildren(false);
-        col.setPadding(Ui.px(80), Ui.px(80), Ui.px(80), Ui.px(100));
-        col.addView(Ui.text(this, title, 64, true, 0.95f));
+        col.setPadding(Ui.px(Theme.SAFE_X), Ui.px(Theme.SAFE_Y + Theme.S4), Ui.px(Theme.SAFE_X), Ui.px(Theme.S12));
+        // one column, centred as a whole, with title / headers / grids sharing its left edge
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setClipChildren(false);
+        body.addView(Ui.text(this, title, Theme.Style.LARGE_TITLE, Theme.PRIMARY), new LinearLayout.LayoutParams(-2, -2));
+        col.addView(body, new LinearLayout.LayoutParams(-2, -2));
         List<View> staggered = new ArrayList<>();
         for (View s : sections) {
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2);
-            lp.topMargin = Ui.px(28);
-            col.addView(s, lp);
+            lp.topMargin = Ui.px(s instanceof GridLayout ? Theme.S2 : Theme.S6);
+            if (s instanceof TextView && !(s instanceof Pill)) lp.leftMargin = Ui.px(12);   // headers sit on the tiles' edge
+            body.addView(s, lp);
             if (s instanceof GridLayout) for (int i = 0; i < ((GridLayout) s).getChildCount(); i++) staggered.add(((GridLayout) s).getChildAt(i));
             else staggered.add(s);
         }
@@ -678,16 +715,17 @@ public class MainActivity extends Activity implements HaLive.Listener {
         if (origin != null) origin.getLocationOnScreen(loc);
         sv.setPivotX(origin != null ? loc[0] + origin.getWidth() / 2f : Ui.W / 2f);
         sv.setPivotY(origin != null ? loc[1] + origin.getHeight() / 2f : Ui.H / 2f);
-        sv.setScaleX(0.86f);
-        sv.setScaleY(0.86f);
-        sv.animate().scaleX(1f).scaleY(1f).setDuration(420).setInterpolator(Motion.EASE).withLayer().start();
+        sv.setScaleX(0.94f);
+        sv.setScaleY(0.94f);
+        Motion.spring(sv, View.SCALE_X, 1f, Motion.PANEL);
+        Motion.spring(sv, View.SCALE_Y, 1f, Motion.PANEL);
         overlay.setAlpha(0f);
         overlay.setVisibility(View.VISIBLE);
         overlay.animate().alpha(1f).setDuration(300).setInterpolator(Motion.EASE).start();
         frost.animate().alpha(1f).setDuration(380).setInterpolator(Motion.EASE).start();
         home.setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);
         home.animate().alpha(0f).scaleX(0.97f).scaleY(0.97f).setDuration(320).setInterpolator(Motion.EASE).withLayer().start();
-        Motion.stagger(staggered, 22, Ui.px(36));
+        Motion.stagger(staggered, 18, Ui.px(28));
         sv.post(() -> {
             View first = col.focusSearch(View.FOCUS_DOWN);
             for (View s : staggered) {
@@ -747,18 +785,18 @@ public class MainActivity extends Activity implements HaLive.Listener {
         Set<String> skip = new HashSet<>(settings.favourites());
         Set<String> hidden = settings.hidden();
         skip.addAll(hidden);
-        int cw = Ui.px(300), ch = Ui.px(169);
+        int cw = Ui.px(288), ch = cw * 10 / 16;
         List<View> cards = new ArrayList<>();
         for (Apps.App a : Apps.scan(this)) {
             if (skip.contains(a.pkg)) continue;
-            CardView c = glassCard(Apps.art(this, a.pkg), a.label, cw, ch, v -> Apps.launch(this, a.pkg));
+            CardView c = appCard(Apps.icon(this, a.pkg), a.label, cw, ch, v -> Apps.launch(this, a.pkg));
             c.setOnLongClickListener(v -> {
                 moreMenu(v, a.pkg);
                 return true;
             });
             cards.add(c);
         }
-        cards.add(glassCard(Apps.artKey(this, "settings"), Ui.tr("Startskärmen", "Home screen"), cw, ch, this::openSettings));
+        cards.add(appCard(Apps.iconKey(this, "settings"), Ui.tr("Startskärmen", "Home screen"), cw, ch, this::openSettings));
         List<View> sections = new ArrayList<>();
         sections.add(grid(cards, 5));
         openPanel(Ui.tr("Fler appar", "More apps"), sections, origin, null);
@@ -774,7 +812,7 @@ public class MainActivity extends Activity implements HaLive.Listener {
         }
         List<View> sections = new ArrayList<>();
         for (Map.Entry<String, List<View>> e : byArea.entrySet()) {
-            if (byArea.size() > 1) sections.add(Ui.text(this, e.getKey(), 34, true, 0.9f));
+            if (byArea.size() > 1) sections.add(Ui.text(this, e.getKey(), Theme.Style.TITLE, Theme.SECONDARY));
             sections.add(grid(e.getValue(), 4));
         }
         openPanel(Ui.tr("Hemmet", "Home"), sections, origin, null);

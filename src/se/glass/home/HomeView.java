@@ -41,30 +41,30 @@ final class HomeView extends FrameLayout {
         TextClock date = new TextClock(c);
         date.setFormat24Hour("EEEE d MMMM");
         date.setFormat12Hour("EEEE d MMMM");
-        Ui.style(date, 40, true, 0.85f);
+        Ui.style(date, Theme.Style.DATE, Theme.SECONDARY);
         clock.addView(date, new LinearLayout.LayoutParams(-2, -2));
         RollingClock time = new RollingClock(c, 250);
         LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(-2, -2);
-        tp.topMargin = -Ui.px(6);
+        tp.topMargin = Ui.px(4);
         clock.addView(time, tp);
-        addView(clock, Ui.at(-1, 112));
+        addView(clock, Ui.at(-1, 118));
 
         chips = new LinearLayout(c);
         chips.setGravity(Gravity.END);
         FrameLayout.LayoutParams cp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END);
-        cp.topMargin = Ui.px(48);
-        cp.rightMargin = Ui.px(60);
+        cp.topMargin = Ui.px(Theme.SAFE_Y);
+        cp.rightMargin = Ui.px(Theme.SAFE_X);
         addView(chips, cp);
 
         pills = new LinearLayout(c);
         pills.setClipChildren(false);
-        addView(pills, Ui.at(60, 48));
+        addView(pills, Ui.at(Theme.SAFE_X, Theme.SAFE_Y));
 
         toasts = new FrameLayout(c);
         toasts.setClipChildren(false);
         FrameLayout.LayoutParams np = new FrameLayout.LayoutParams(Ui.px(560), -2, Gravity.TOP | Gravity.END);
-        np.topMargin = Ui.px(120);
-        np.rightMargin = Ui.px(60);
+        np.topMargin = Ui.px(Theme.SAFE_Y + 80);
+        np.rightMargin = Ui.px(Theme.SAFE_X);
         addView(toasts, np);
 
         rowsBox = new LinearLayout(c);
@@ -81,7 +81,7 @@ final class HomeView extends FrameLayout {
         r.rowIndex = rows.size();
         rows.add(r);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
-        if (r.rowIndex > 0) lp.topMargin = Ui.px(18);
+        if (r.rowIndex > 0) lp.topMargin = Ui.px(Theme.S3);
         rowsBox.addView(r, lp);
     }
 
@@ -141,23 +141,27 @@ final class HomeView extends FrameLayout {
         for (RowView r : rows) {
             float a = !expanded ? (r.rowIndex == 0 ? 1f : 0f)
                     : r.rowIndex < focusedRow - 1 ? 0f : r.rowIndex == focusedRow - 1 ? 0.3f : 1f;
-            fade(r, a, animate);
+            fade(r, a, animate, expanded ? Math.max(0, r.rowIndex - focusedRow) * 40 : 0);
             r.setDescendantFocusability(!expanded && r.rowIndex > 0 ? ViewGroup.FOCUS_BLOCK_DESCENDANTS
                     : ViewGroup.FOCUS_AFTER_DESCENDANTS);
         }
     }
 
     private static void go(View v, android.util.Property<View, Float> p, float to, boolean animate) {
-        Motion.Spring s = Motion.spring(v, p, to, Motion.SMOOTH);
+        Motion.Spring s = Motion.spring(v, p, to, Motion.LAYOUT);
         if (!animate) s.snap(to);
     }
 
     private static void fade(View v, float to, boolean animate) {
+        fade(v, to, animate, 0);
+    }
+
+    private static void fade(View v, float to, boolean animate, int delayMs) {
         v.animate().cancel();
         if (!animate) {
             v.setAlpha(to);
             return;
         }
-        v.animate().alpha(to).setDuration(380).setInterpolator(Motion.EASE).start();
+        v.animate().alpha(to).setStartDelay(to > v.getAlpha() ? delayMs : 0).setDuration(420).setInterpolator(Motion.EASE).start();
     }
 }

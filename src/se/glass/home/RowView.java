@@ -32,16 +32,16 @@ final class RowView extends FrameLayout {
         this.centreIfFits = centreIfFits;
         setClipChildren(false);
         setClipToPadding(false);
-        title = titleText != null ? Ui.text(c, titleText, 34, true, 0.95f) : null;
+        title = titleText != null ? Ui.text(c, titleText, Theme.Style.TITLE, Theme.PRIMARY) : null;
         if (title != null) addView(title);
         strip = new LinearLayout(c);
         strip.setClipChildren(false);
         strip.setClipToPadding(false);
-        strip.setPadding(padLeft, Ui.px(24), padLeft, Ui.px(24));
+        strip.setPadding(padLeft, Ui.px(Theme.S3), padLeft, Ui.px(Theme.S6));   // room below for the focused label
         addView(strip);
     }
 
-    /** Replace the cards. `gap` may be negative (glass PNGs have transparent sides and overlap). */
+    /** Replace the cards, `gap` (real px) apart. */
     void setItems(List<CardView> cards, int itemW, int gap) {
         this.gap = gap;
         strip.removeAllViews();
@@ -86,8 +86,8 @@ final class RowView extends FrameLayout {
             target = -(card(i).getLeft() - padLeft);
             target = Math.max(Math.min(0, view - content), Math.min(0, target));
         }
-        if (animate) Motion.spring(strip, TRANSLATION_X, target, Motion.SMOOTH);
-        else Motion.spring(strip, TRANSLATION_X, target, Motion.SMOOTH).snap(target);
+        if (animate) Motion.spring(strip, TRANSLATION_X, target, Motion.SCROLL);
+        else Motion.spring(strip, TRANSLATION_X, target, Motion.SCROLL).snap(target);
     }
 
     /** Move a card from one slot to another with a FLIP animation (move mode for favourites). */
@@ -115,7 +115,7 @@ final class RowView extends FrameLayout {
                     float dx = before[oldIndex] - c.getLeft();
                     if (dx != 0) {
                         c.setTranslationX(dx);
-                        Motion.spring(c, TRANSLATION_X, 0f, Motion.SMOOTH);
+                        Motion.spring(c, TRANSLATION_X, 0f, Motion.LAYOUT);
                     }
                 }
                 scrollToIndex(to, true);
@@ -130,7 +130,7 @@ final class RowView extends FrameLayout {
         int th = 0;
         if (title != null) {
             title.measure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.AT_MOST), MeasureSpec.UNSPECIFIED);
-            th = title.getMeasuredHeight();
+            th = title.getMeasuredHeight() + Ui.px(Theme.S1);
         }
         strip.measure(MeasureSpec.UNSPECIFIED, MeasureSpec.UNSPECIFIED);   // the strip may be wider than the screen
         setMeasuredDimension(w, th + strip.getMeasuredHeight());
@@ -141,7 +141,7 @@ final class RowView extends FrameLayout {
         int th = 0;
         if (title != null) {
             title.layout(padLeft, 0, padLeft + title.getMeasuredWidth(), title.getMeasuredHeight());
-            th = title.getMeasuredHeight() - Ui.px(10);
+            th = title.getMeasuredHeight() + Ui.px(Theme.S1);
         }
         strip.layout(0, th, strip.getMeasuredWidth(), th + strip.getMeasuredHeight());
         if (changed) scrollToIndex(lastIndex, false);

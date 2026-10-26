@@ -35,22 +35,28 @@ final class Tiles {
         private float brightness = -1;   // 0..1 for lights that are on, -1 = no bar
         boolean on;
 
+        private final Glass glass = new Glass(null, 0, true, 0.2f);
+        private final Paint glyph = new Paint(Paint.ANTI_ALIAS_FLAG);
+
         Face(Context c, String id, int w, int h) {
             super(c);
             this.id = id;
             setWillNotDraw(false);
-            setBackground(new Glass(null, 0, true, 0.22f));
+            setBackground(glass);
             LinearLayout col = new LinearLayout(c);
             col.setOrientation(LinearLayout.VERTICAL);
             col.setGravity(Gravity.BOTTOM);
-            col.setPadding(Ui.px(26), Ui.px(18), Ui.px(26), Ui.px(26));
-            name = Ui.text(c, id, 26, false, 0.85f);
+            int pad = Ui.px(h > Ui.px(170) ? Theme.S4 : Theme.S3);
+            col.setPadding(pad, pad, pad, pad);
+            name = Ui.text(c, id, Theme.Style.HEADLINE, Theme.PRIMARY);
             name.setSingleLine();
             name.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            value = Ui.text(c, "…", h > Ui.px(170) ? 44 : 36, true, 1f);
+            value = Ui.text(c, "…", Theme.Style.BODY, Theme.SECONDARY);
             value.setSingleLine();
             col.addView(name);
-            col.addView(value);
+            LinearLayout.LayoutParams vp = new LinearLayout.LayoutParams(-2, -2);
+            vp.topMargin = Ui.px(6);
+            col.addView(value, vp);
             addView(col, new LayoutParams(w, h));
             bar.setColor(0xD9FFFFFF);
         }
@@ -69,7 +75,11 @@ final class Tiles {
             JSONObject attrs = s.optJSONObject("attributes");
             value.setText(isAction() ? Ui.tr("Starta", "Start") : pretty(state, attrs));   // a scene's state is a timestamp
             boolean nowOn = !isAction() && (state.equals("on") || state.equals("open") || state.equals("playing") || state.equals("unlocked"));
-            if (nowOn != on) setBackground(new Glass(null, nowOn ? ON_TINT : 0, true, 0.22f));
+            if (nowOn != on) {
+                glass.setGlassTint(nowOn ? ON_TINT : 0);
+                value.setTextColor(Glass.withAlpha(0xFFFFFF, nowOn ? 0.85f : Theme.SECONDARY));
+                invalidate();
+            }
             on = nowOn;
             float b = id.startsWith("light.") && nowOn && attrs != null && attrs.has("brightness") ? attrs.optInt("brightness") / 255f : -1;
             if (b != brightness) {
@@ -81,13 +91,28 @@ final class Tiles {
         /** Short "Startad ✓" flash for scenes/scripts. */
         void flash() {
             value.setText(Ui.tr("Startad ✓", "Started ✓"));
-            setBackground(new Glass(null, ON_TINT, true, 0.22f));
-            postDelayed(() -> setBackground(new Glass(null, 0, true, 0.22f)), 1500);
+            glass.setGlassTint(ON_TINT);
+            postDelayed(() -> glass.setGlassTint(on ? ON_TINT : 0), 1500);
         }
 
         @Override
         protected void onDraw(Canvas c) {
             super.onDraw(c);
+            // small status glyph, top-left: a lamp dot (filled when on) or a scene spark
+            float g = getHeight() * 0.09f, gx = getHeight() * 0.2f, gy = getHeight() * 0.22f;
+            glyph.setStyle(on || isAction() ? Paint.Style.FILL : Paint.Style.STROKE);
+            glyph.setStrokeWidth(Math.max(2f, g * 0.22f));
+            glyph.setColor(on ? 0xFFFFFFFF : 0xB3FFFFFF);
+            if (isAction()) {
+                for (int i = 0; i < 4; i++) {   // four-point spark
+                    c.save();
+                    c.rotate(i * 90, gx, gy);
+                    c.drawOval(gx - g * 0.18f, gy - g * 1.1f, gx + g * 0.18f, gy, glyph);
+                    c.restore();
+                }
+            } else {
+                c.drawCircle(gx, gy, g * 0.7f, glyph);
+            }
             if (brightness < 0) return;
             float inset = getHeight() * 0.1f, t = Math.max(3, getHeight() * 0.035f), y = getHeight() - inset * 0.7f;
             RectF track = new RectF(inset * 1.4f, y - t, getWidth() - inset * 1.4f, y);

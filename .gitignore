@@ -19,3 +19,9 @@ __pycache__/
 ha.json
 jellyfin.json
 update.json
+
+# /brag launch video output
+brag-output*/
+
+# local Claude Code skill: points at the private Obsidian KB (personal paths)
+.claude/

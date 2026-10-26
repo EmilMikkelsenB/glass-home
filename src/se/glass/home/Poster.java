@@ -44,9 +44,9 @@ final class Poster extends Drawable {
     @Override
     protected void onBoundsChange(Rect b) {
         r.set(b);
-        float h = r.height(), rad = h * 0.12f;
+        float h = r.height();
         clip.reset();
-        clip.addRoundRect(r, rad, rad, Path.Direction.CW);
+        Squircle.add(clip, r, h * Theme.CARD_RADIUS);
         shade.setShader(new LinearGradient(0, r.bottom - h * 0.4f, 0, r.bottom, 0, 0x8C000000, Shader.TileMode.CLAMP));
         rim.setStrokeWidth(Math.max(1.5f, h / 120f));
         rim.setShader(new LinearGradient(r.left, r.top, r.right, r.bottom,
@@ -64,7 +64,7 @@ final class Poster extends Drawable {
 
     @Override
     public void draw(Canvas c) {
-        float h = r.height(), rad = h * 0.12f;
+        float h = r.height();
         c.save();
         c.clipPath(clip);
         paint.setColor(Glass.withAlpha(Color.WHITE, 0.12f));   // placeholder while the image loads
@@ -87,7 +87,7 @@ final class Poster extends Drawable {
             c.drawRoundRect(r.left + inset, y, r.left + inset + (r.width() - 2 * inset) * Math.min(1, progress), y + t, t / 2, t / 2, bar);
         }
         c.restore();
-        c.drawRoundRect(r, rad, rad, rim);
+        c.drawPath(clip, rim);
     }
 
     @Override public void setAlpha(int alpha) {}

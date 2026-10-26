@@ -32,10 +32,21 @@ final class Motion {
         }
     }
 
-    /** Response presets: stiffness, damping ratio. */
-    static final float[] SNAPPY = {420f, 0.78f};   // focus scale: quick with a little overshoot
-    static final float[] SMOOTH = {180f, 0.95f};   // scrolling and layout moves: no bounce
-    static final float[] WOBBLY = {260f, 0.45f};   // tilt kick, settles with a wobble
+    /** SwiftUI-style spring: `response` = period in seconds, `damping` = fraction of critical. Returns {stiffness, ratio}. */
+    static float[] preset(float response, float damping) {
+        float w = (float) (2 * Math.PI / response);
+        return new float[]{w * w, damping};
+    }
+
+    static final float[] FOCUS_IN = preset(0.32f, 0.82f);    // lift: quick, the faintest settle
+    static final float[] FOCUS_OUT = preset(0.45f, 1f);      // drop back: slower, no overshoot
+    static final float[] SCROLL = preset(0.5f, 1f);          // rows and the vertical stack: never bounce
+    static final float[] LAYOUT = preset(0.55f, 0.9f);       // clock / rows rearranging
+    static final float[] PANEL = preset(0.42f, 0.88f);       // folders and menus
+    static final float[] SNAPPY = FOCUS_IN, SMOOTH = SCROLL; // older names
+
+    /** Called after every spring frame (glass resamples its backdrop while things move). */
+    static Runnable onFrame;
 
     /** Animate `prop` of `v` to `target`. Re-targeting a running spring keeps its velocity. */
     static Spring spring(View v, Property<View, Float> prop, float target, float[] preset) {
@@ -61,7 +72,7 @@ final class Motion {
             View v = views.get(i);
             v.setAlpha(0f);
             v.setTranslationY(fromDy);
-            v.animate().alpha(1f).translationY(0f).setStartDelay(Math.min(i * stepMs, 400)).setDuration(380)
+            v.animate().alpha(1f).translationY(0f).setStartDelay(Math.min(i * stepMs, 360)).setDuration(420)
                     .setInterpolator(EASE).withLayer().start();
         }
     }
@@ -120,6 +131,7 @@ final class Motion {
                 velocity = 0;
                 clock.cancel();
                 prop.set(view, x);
+                if (onFrame != null) onFrame.run();
                 if (onRest != null) {
                     Runnable r = onRest;
                     onRest = null;
@@ -128,6 +140,7 @@ final class Motion {
                 return;
             }
             prop.set(view, x);
+            if (onFrame != null) onFrame.run();
         }
     }
 }

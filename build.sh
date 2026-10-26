@@ -21,7 +21,9 @@ VERSION_NAME="${VERSION_NAME:-dev-$(date +%Y%m%d-%H%M)}"
 # artwork from artwork/ (python artwork/make_assets.py)
 rm -rf build assets res && mkdir -p build/classes build/dex build/gen assets res/drawable
 cp -r res-src/* res/                      # hand-written resources (xml, values); res/ itself is generated
-for f in "$ART"/wide/*.png; do cp "$f" "assets/wide_$(basename "$f")"; done
+cp -r assets-src/* assets/                # fonts (Inter, OFL)
+for f in "$ART"/logos/*.png; do cp "$f" "assets/logo_$(basename "$f")"; done   # layered icons: logo layer
+cp "$ART/brands.json" assets/brands.json
 cp "$ART/wallpaper_dark_1920x1080.jpg" assets/wallpaper.jpg   # neutral default; Apple wallpapers are downloaded on the TV
 cp "$ART/icons/more.png" res/drawable/icon.png
 cp "$ART/banners/more.png" res/drawable/banner.png

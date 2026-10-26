@@ -211,26 +211,26 @@ public class SetupActivity extends Activity {
         header(c, Ui.tr("Välj favoriter", "Choose favourites"),
                 Ui.tr("Tryck OK på apparna du vill ha på startskärmen. Siffran är ordningen. Resten hamnar i Fler appar. Håll inne OK för att dölja en app helt.",
                         "Press OK on the apps you want on the home screen. The number is the order. The rest go to More apps. Hold OK to hide an app completely."));
-        int cw = Ui.px(280), ch = Ui.px(158);
+        int cw = Ui.px(272), ch = cw * 10 / 16;
         List<View> cards = new ArrayList<>();
         List<TextView> badges = new ArrayList<>();
         List<Apps.App> apps = Apps.scan(this);
         for (Apps.App a : apps) {
             FrameLayout face = new FrameLayout(this);
-            ImageView img = new ImageView(this);
-            img.setImageDrawable(Apps.art(this, a.pkg));
-            img.setScaleType(ImageView.ScaleType.FIT_CENTER);
-            face.addView(img, new FrameLayout.LayoutParams(cw, ch));
+            face.setClipChildren(false);
+            face.addView(Apps.icon(this, a.pkg), new FrameLayout.LayoutParams(cw, ch));
             TextView badge = Ui.text(this, "", 26, true, 1f);
             badge.setGravity(Gravity.CENTER);
-            badge.setBackground(new Glass(null, 0xFF0A84FF, true, 0.5f));
+            badge.setBackground(badgeDot(Theme.BLUE));
             FrameLayout.LayoutParams bp = new FrameLayout.LayoutParams(Ui.px(54), Ui.px(54), Gravity.TOP | Gravity.END);
-            bp.topMargin = Ui.px(6);
-            bp.rightMargin = Ui.px(22);
+            bp.topMargin = -Ui.px(14);
+            bp.rightMargin = -Ui.px(14);
             face.addView(badge, bp);
             badge.setTag(a.pkg);
             badges.add(badge);
-            CardView card = new CardView(this, face, cw, ch, a.label, null, 1.12f, true);
+            CardView card = new CardView(this, face, cw, ch, a.label, null, 1.08f, false);
+            card.title.setGravity(Gravity.CENTER);   // when picking, every name stays readable
+            Ui.style(card.title, Theme.Style.CAPTION, Theme.SECONDARY);
             card.setOnClickListener(v -> {
                 if (favs.contains(a.pkg)) favs.remove(a.pkg);
                 else {
@@ -238,8 +238,8 @@ public class SetupActivity extends Activity {
                     hidden.remove(a.pkg);
                 }
                 updateBadges(badges, cards);
-                Motion.kick(badge, View.SCALE_X, 1f, 8f, Motion.WOBBLY);
-                Motion.kick(badge, View.SCALE_Y, 1f, 8f, Motion.WOBBLY);
+                Motion.kick(badge, View.SCALE_X, 1f, 8f, Motion.FOCUS_IN);
+                Motion.kick(badge, View.SCALE_Y, 1f, 8f, Motion.FOCUS_IN);
             });
             card.setOnLongClickListener(v -> {
                 if (hidden.contains(a.pkg)) hidden.remove(a.pkg);
@@ -259,14 +259,14 @@ public class SetupActivity extends Activity {
         g.setClipChildren(false);
         for (View v : cards) {
             GridLayout.LayoutParams lp = new GridLayout.LayoutParams();
-            lp.setMargins(Ui.px(8), Ui.px(8), Ui.px(8), Ui.px(8));
+            lp.setMargins(Ui.px(Theme.S2), Ui.px(Theme.S1), Ui.px(Theme.S2), Ui.px(Theme.S2));
             g.addView(v, lp);
         }
         ScrollView sv = new ScrollView(this);   // clips (unlike most of our views): the grid must not draw over the footer
         sv.setVerticalScrollBarEnabled(false);
         sv.setFadingEdgeLength(Ui.px(60));
         sv.setVerticalFadingEdgeEnabled(true);
-        g.setPadding(Ui.px(24), Ui.px(28), Ui.px(24), Ui.px(28));   // room for the focused card's lift
+        g.setPadding(Ui.px(24), Ui.px(58), Ui.px(24), Ui.px(28));   // badges sit above the tiles   // room for the focused card's lift
         sv.addView(g);
         LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-1, 0, 1f);
         sp.topMargin = Ui.px(10);
@@ -279,6 +279,15 @@ public class SetupActivity extends Activity {
         Motion.stagger(cards.subList(0, Math.min(cards.size(), 15)), 25, Ui.px(30));
     }
 
+    /** iOS-style round badge with a hairline light rim. */
+    private static android.graphics.drawable.GradientDrawable badgeDot(int colour) {
+        android.graphics.drawable.GradientDrawable d = new android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM, new int[]{AppIcon.lighten(colour, 0.15f), colour});
+        d.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        d.setStroke(Math.max(1, Ui.px(1.5f)), 0x59FFFFFF);
+        return d;
+    }
+
     private void updateBadges(List<TextView> badges, List<View> cards) {
         for (int i = 0; i < badges.size(); i++) {
             TextView b = badges.get(i);
@@ -287,7 +296,7 @@ public class SetupActivity extends Activity {
             boolean hid = hidden.contains(pkg);
             b.setVisibility(n >= 0 || hid ? View.VISIBLE : View.INVISIBLE);
             b.setText(hid ? "–" : String.valueOf(n + 1));
-            b.setBackground(new Glass(null, hid ? 0xFF8E8E93 : 0xFF0A84FF, true, 0.5f));
+            b.setBackground(badgeDot(hid ? 0xFF8E8E93 : Theme.BLUE));
             cards.get(i).setAlpha(hid ? 0.45f : 1f);
         }
     }

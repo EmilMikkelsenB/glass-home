@@ -18,7 +18,9 @@ Screenshots are from demo mode (fake data) on the built-in wallpaper.
 ## Features
 
 - **Calm by default:** clock, date and your favourite apps. Press **down** and the clock moves aside for more rows.
-- **Smooth motion:** spring physics everywhere, Apple TV-style card lift (tilt, light sheen, shadow), fixed-focus scrolling,
+- **Real glass:** every surface samples a frosted, vibrancy-boosted copy of what is behind it, with continuous (squircle) corners
+  and a lit rim. App icons are tvOS-style layers (brand plate + logo) that drift into parallax when focused.
+- **Smooth motion:** spring physics everywhere (tuned like SwiftUI springs), Apple TV-style lift and shadow, fixed-focus scrolling,
   wallpaper parallax, panels that zoom out of the button you pressed, rolling clock digits.
 - **First-run setup on the TV:** choose and order favourites from all installed apps (the rest go to "More apps", or hide them),
   teach it what remote buttons do (mic, Netflix, YouTube… → open an app, a panel, a Home Assistant scene, play/pause; separate
@@ -92,5 +94,5 @@ bash make-share.sh                                  # → share/ + glass-home-sh
 Every push to `main` builds a release (`.github/workflows/release.yml`); pull requests get a build check. Releases are signed with
 the key in the `KEYSTORE_B64` secret so they install over earlier versions.
 
-Brand logos are trademarks of their owners and are used only to label the apps you already have installed. macOS wallpapers are
+Type is Inter (SIL Open Font License, `assets-src/fonts/OFL.txt`). Brand logos are trademarks of their owners and are used only to label the apps you already have installed. macOS wallpapers are
 © Apple and are never included in this repo or the APK.

@@ -4,6 +4,7 @@ Run:  python make_assets.py            -> full set + zip in ./out
       python make_assets.py --preview  -> only ./out/preview.png
 Add an app: append a line to APPS below and re-run.
 """
+import json
 import math
 import random
 import sys
@@ -232,6 +233,58 @@ def paste_mark(img, app, cx, cy, max_w, max_h):
         paste_glyph(img, glyph, cx, cy, max_h * 1.25)
 
 
+# ---- tvOS-style layered icons: logo layer only (the app draws plate + glass at runtime) --------------
+LOGO_W, LOGO_H = 640, 400          # 16:10, same as the tile
+INK_TARGET = 0.085                 # share of the tile covered by logo ink (alpha) — equal optical weight for every logo
+MAX_W, MAX_H = 0.60, 0.44          # never wider/taller than this share of the tile
+KEEP_COLOUR = {"discovery", "svtplay"}   # multi-colour logos that lose their identity in plain white
+
+
+def logo_layer(app):
+    """Trimmed RGBA logo for `app`: the real logo (white, unless KEEP_COLOUR) or its drawn glyph."""
+    key, _, glyph, _ = app
+    p = LOGOS / f"{key}.png"
+    if p.exists():
+        lg = Image.open(p).convert("RGBA")
+        if key not in KEEP_COLOUR:
+            white = Image.new("RGBA", lg.size, (255, 255, 255, 0))
+            white.putalpha(lg.getchannel("A"))
+            lg = white
+    else:
+        layer, _ = draw_glyph(glyph, 0, 0, 800)
+        lg = Image.new("RGBA", layer.size, (255, 255, 255, 0))
+        lg.putalpha(layer)
+    box = lg.getchannel("A").point(lambda v: 255 if v > 8 else 0).getbbox()
+    return lg.crop(box) if box else lg
+
+
+def make_logo(app):
+    """Logo centred on a transparent 16:10 canvas, scaled by ink area so wide and square logos look equally big."""
+    lg = logo_layer(app)
+    ink = np.asarray(lg.getchannel("A"), np.float32).sum() / 255.0
+    target = INK_TARGET * LOGO_W * LOGO_H
+    s = math.sqrt(target / max(ink, 1.0))
+    if lg.width / lg.height > 2.2:   # wordmarks read bigger than marks of the same ink area
+        s *= 0.86
+    s = min(s, MAX_W * LOGO_W / lg.width, MAX_H * LOGO_H / lg.height)
+    lg = lg.resize((max(1, round(lg.width * s)), max(1, round(lg.height * s))), Image.LANCZOS)
+    out = Image.new("RGBA", (LOGO_W, LOGO_H), (0, 0, 0, 0))
+    out.alpha_composite(lg, ((LOGO_W - lg.width) // 2, (LOGO_H - lg.height) // 2))
+    return out
+
+
+def logo_sheet(logos):
+    """All logos on their brand plates in one image, to eyeball optical size consistency."""
+    cols, tw, th = 5, 320, 200
+    sheet = Image.new("RGB", (cols * (tw + 20) + 20, ((len(logos) + cols - 1) // cols) * (th + 20) + 20), (12, 14, 30))
+    for i, (app, lg) in enumerate(logos):
+        tint = app[3] or "#3A3F5C"
+        plate = Image.new("RGBA", (tw, th), tint)
+        plate.alpha_composite(lg.resize((tw, th), Image.LANCZOS))
+        sheet.paste(plate.convert("RGB"), (20 + (i % cols) * (tw + 20), 20 + (i // cols) * (th + 20)))
+    return sheet
+
+
 # ---- icons -----------------------------------------------------------------
 def make_icon(app, size=512):
     S = size * SS
@@ -346,8 +399,18 @@ def main():
     for name, img in walls.items():
         cover(img, 3840, 2160).save(OUT / f"wallpaper_{name}_3840x2160.jpg", quality=95)
         cover(img, 1920, 1080).save(OUT / f"wallpaper_{name}_1920x1080.jpg", quality=95)
-    for d in ("icons", "banners", "wide"):
+    for d in ("icons", "banners", "wide", "logos"):
         (OUT / d).mkdir(exist_ok=True)
+    logos = []
+    for app in APPS:
+        lg = make_logo(app)
+        lg.save(OUT / "logos" / f"{app[0]}.png")
+        logos.append((app, lg))
+    (OUT / "brands.json").write_text(json.dumps({a[0]: a[3] for a in APPS}, indent=1))
+    logo_sheet(logos).save(OUT / "logo-sheet.png")
+    if "--sheet" in sys.argv:
+        print(OUT / "logo-sheet.png")
+        return
     for app in APPS:
         make_icon(app).save(OUT / "icons" / f"{app[0]}.png")
         make_banner(app).save(OUT / "banners" / f"{app[0]}.png")
