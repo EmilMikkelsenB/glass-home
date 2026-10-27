@@ -107,6 +107,8 @@ public class KeyService extends AccessibilityService {
             switch (a.optString("panel")) {
                 case "home": return Ui.tr("Hemmet", "Home panel");
                 case "more": return Ui.tr("Fler appar", "More apps");
+                case "search": return Ui.tr("Sök", "Search");
+                case "quick": return Ui.tr("Snabbinställningar", "Quick settings");
                 default: return Ui.tr("Startskärmens inställningar", "Home screen settings");
             }
         }

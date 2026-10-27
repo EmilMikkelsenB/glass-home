@@ -72,13 +72,14 @@ public class MainActivity extends Activity implements HaLive.Listener {
     private final Map<String, TextView> chipViews = new HashMap<>();
     private volatile Set<String> haInterest = new HashSet<>();
     private Jellyfin jf;
+    private Jellyseerr seerr;
     private Updater updater;
 
     private FrameLayout root, overlay;
     private ImageView wall, frost, shelfA, shelfB;
     private boolean shelfOnA;
     private HomeView home;
-    private RowView favRow, resumeRow, latestRow, quickRow;
+    private RowView favRow, resumeRow, latestRow, wishRow, quickRow;
     private Pill updatePill, appPill, playingPill;
     private Updater.Release pendingUpdate;
     private String newApp;
@@ -176,10 +177,8 @@ public class MainActivity extends Activity implements HaLive.Listener {
         if (moving != null) endMove();
         dimming = null;
         closePanel();
-        if (home.expanded) {   // Home pressed while home: back to the calm collapsed view
-            home.setExpanded(false);
-            favRow.focusLast();
-        }
+        if (home.expanded) home.setExpanded(false);   // Home pressed while home: back to the calm collapsed view
+        if (favRow != null) favRow.focusLast();
         handleOpen(intent);
     }
 
@@ -191,6 +190,8 @@ public class MainActivity extends Activity implements HaLive.Listener {
             if (open.equals("home") && ha != null) openHomePanel(null);
             else if (open.equals("more")) openMore(null);
             else if (open.equals("settings")) openSettings(null);
+            else if (open.equals("search")) openSearch(null);
+            else if (open.equals("quick")) openQuick(null);
         });
     }
 
@@ -201,6 +202,7 @@ public class MainActivity extends Activity implements HaLive.Listener {
         live = null;
         ha = HomeAssistant.load(this, settings);
         jf = Jellyfin.load(this, settings);
+        seerr = Jellyseerr.load(this, settings);
         updater = Updater.load(this, REPO);
         haStates.clear();
         Set<String> interest = new HashSet<>();
@@ -235,6 +237,11 @@ public class MainActivity extends Activity implements HaLive.Listener {
             if (!down) back();
             return true;
         }
+        View f = getCurrentFocus();
+        if (down && code == KeyEvent.KEYCODE_DPAD_DOWN && overlay.getVisibility() != View.VISIBLE && f != null
+                && (f.getParent() == home.chips || f.getParent() == home.pills)) {
+            return favRow.focusLast();   // top pills → back to the apps
+        }
         if (down && overlay.getVisibility() != View.VISIBLE
                 && (code == KeyEvent.KEYCODE_DPAD_DOWN || code == KeyEvent.KEYCODE_DPAD_UP)) {
             int r = home.rowOf(getCurrentFocus());
@@ -247,6 +254,7 @@ public class MainActivity extends Activity implements HaLive.Listener {
                     return true;
                 }
                 if (dir > 0) return true;
+                if (!home.expanded && topPill != null) return topPill.requestFocus();
                 if (home.expanded) {
                     home.setExpanded(false);
                     return true;
@@ -284,6 +292,23 @@ public class MainActivity extends Activity implements HaLive.Listener {
             }
         }
 
+        Pill search = new Pill(this, Ui.tr("Sök", "Search"), 0, 22);
+        topPill = jf != null || seerr != null ? search : null;
+        search.setOnClickListener(this::openSearch);
+        Pill gear = new Pill(this, "\u2699", 0, 22);
+        gear.setOnClickListener(this::openQuick);
+        LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-2, -2);
+        sp.leftMargin = Ui.px(14);
+        if (jf != null || seerr != null) home.chips.addView(search, 0, sp);
+        home.chips.addView(gear, new LinearLayout.LayoutParams(sp));
+        if (topPill == null) topPill = gear;
+        // the weather chip between them isn't focusable, so the default search jumps back down to the apps
+        search.setId(View.generateViewId());
+        gear.setId(View.generateViewId());
+        search.setNextFocusRightId(gear.getId());
+        gear.setNextFocusLeftId(search.getId());
+        gear.setNextFocusRightId(gear.getId());
+
         home.pills.removeAllViews();
         updatePill = pill(0xFF0A84FF, v -> openUpdate(v));
         appPill = pill(0, v -> addNewApp());
@@ -292,6 +317,11 @@ public class MainActivity extends Activity implements HaLive.Listener {
             return true;
         });
         playingPill = pill(0, v -> mediaPlayPause());
+        sleepPill = pill(0, v -> {
+            SleepReceiver.set(this, 0);
+            showSleep();
+        });
+        showSleep();
         if (pendingUpdate != null) showUpdate(pendingUpdate);
 
         // favourites + Hemmet + Fler appar
@@ -330,6 +360,13 @@ public class MainActivity extends Activity implements HaLive.Listener {
         if (jf != null) {
             resumeRow = mediaRow(Ui.tr("Fortsätt titta", "Continue watching"), Cache.loadItems(this, "resume"));
             latestRow = mediaRow(Ui.tr("Nyligen tillagt", "Recently added"), Cache.loadItems(this, "latest"));
+        }
+        wishRow = null;
+        if (seerr != null) {
+            wishRow = new RowView(this, Ui.tr("Önska", "Request"), Theme.SAFE_X, false);
+            wishRow.listener = this::onCardFocused;
+            wishRow.setVisibility(View.GONE);
+            home.addRow(wishRow);
         }
         if (ha != null && !ha.entities.isEmpty()) {
             quickRow = new RowView(this, Ui.tr("Hemmet", "Home"), Theme.SAFE_X, false);
@@ -395,7 +432,7 @@ public class MainActivity extends Activity implements HaLive.Listener {
         c.setTag(it);
         c.setOnClickListener(v -> {
             if (settings.demo()) toast(c.title.getText().toString(), Ui.tr("Demoläge", "Demo mode"));
-            else startActivity(Jellyfin.openIntent(it));
+            else playDirect(it);
         });
         c.setOnLongClickListener(v -> {
             mediaMenu(c);
@@ -515,8 +552,10 @@ public class MainActivity extends Activity implements HaLive.Listener {
 
     // ---- Jellyfin ------------------------------------------------------------
     private void refreshMedia() {
-        if (jf == null || System.currentTimeMillis() - mediaFetchedAt < 30_000) return;
+        if (System.currentTimeMillis() - mediaFetchedAt < 30_000) return;
         mediaFetchedAt = System.currentTimeMillis();
+        refreshWishes();
+        if (jf == null) return;
         Jellyfin source = jf;
         io.execute(() -> {
             try {
@@ -534,6 +573,224 @@ public class MainActivity extends Activity implements HaLive.Listener {
                 Log.w("GlassHome", "jellyfin", e);   // keep showing the cached rows
             }
         });
+    }
+
+    /**
+     * Resume in the Jellyfin app: open the item there (the app must be in front to start playback), then tell its
+     * remote-control session to play from the saved position. Series and failures just stay on the item page.
+     */
+    private void playDirect(Jellyfin.Item it) {
+        startActivity(Jellyfin.openIntent(it));
+        if (!it.type.equals("Episode") && !it.type.equals("Movie")) return;
+        Jellyfin source = jf;
+        io.execute(() -> {
+            try {
+                for (int i = 0; i < 16; i++) {   // the app needs a few seconds to register its session
+                    String session = source.tvSession(android.os.Build.MODEL);
+                    if (session != null) {
+                        source.playNow(session, it);
+                        return;
+                    }
+                    Thread.sleep(500);
+                }
+                Log.i("GlassHome", "play directly: no Jellyfin session for " + android.os.Build.MODEL);
+            } catch (Exception e) {
+                Log.w("GlassHome", "play directly", e);
+            }
+        });
+    }
+
+    // ---- Jellyseerr: Önska -----------------------------------------------------
+    private void refreshWishes() {
+        if (seerr == null) return;
+        Jellyseerr source = seerr;
+        io.execute(() -> {
+            try {
+                List<Jellyseerr.Title> trending = source.trending();
+                runOnUiThread(() -> {
+                    if (source != seerr || wishRow == null) return;
+                    List<CardView> cards = new ArrayList<>();
+                    int mw = Ui.px(352), mh = mw * 9 / 16;
+                    for (Jellyseerr.Title t : trending) if (t.status != Jellyseerr.AVAILABLE) cards.add(wishCard(t, mw, mh));
+                    boolean hadFocus = wishRow.hasFocus();
+                    wishRow.setItems(cards, mw, Ui.px(Theme.S4));
+                    wishRow.setVisibility(cards.isEmpty() ? View.GONE : View.VISIBLE);
+                    if (hadFocus && !cards.isEmpty()) wishRow.focusLast();
+                });
+            } catch (Exception e) {
+                Log.w("GlassHome", "jellyseerr", e);
+            }
+        });
+    }
+
+    private CardView wishCard(Jellyseerr.Title t, int mw, int mh) {
+        Poster poster = new Poster(0f);
+        ImageView img = new ImageView(this);
+        img.setImageDrawable(poster);
+        CardView c = new CardView(this, img, mw, mh, t.name, t.label(), 1.1f, false);
+        c.setOnClickListener(v -> {
+            if (t.requestable()) confirmRequest(c, t);
+            else toast(t.name, t.label());
+        });
+        Jellyseerr source = seerr;
+        images.execute(() -> {
+            Bitmap bm = source.image(t, 480);
+            if (bm != null) runOnUiThread(() -> poster.setBitmap(bm));
+        });
+        return c;
+    }
+
+    private void confirmRequest(CardView origin, Jellyseerr.Title t) {
+        List<View> sections = new ArrayList<>();
+        sections.add(Ui.text(this, (t.type.equals("tv") ? Ui.tr("Serie", "Series") : Ui.tr("Film", "Film"))
+                + (t.year.isEmpty() ? "" : " · " + t.year) + Ui.tr(" · laddas ner till Jellyfin", " · downloads to Jellyfin"),
+                Theme.Style.BODY, Theme.SECONDARY));
+        LinearLayout buttons = new LinearLayout(this);
+        Pill go = action(Ui.tr("Begär", "Request"), v -> {
+            Jellyseerr source = seerr;
+            io.execute(() -> {
+                try {
+                    source.request(t);
+                    t.status = Jellyseerr.PENDING;
+                    runOnUiThread(() -> {
+                        closePanel();
+                        toast(t.name, Ui.tr("Begärd \u2713", "Requested \u2713"));
+                        if (origin.subtitle != null) origin.subtitle.setText(t.label());
+                    });
+                } catch (Exception e) {
+                    Log.w("GlassHome", "request", e);
+                    runOnUiThread(() -> toast(t.name, Ui.tr("Kunde inte begära", "Couldn't request")));
+                }
+            });
+        });
+        go.setTint(Theme.BLUE);
+        buttons.addView(go);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2);
+        lp.leftMargin = Ui.px(Theme.S3);
+        buttons.addView(action(Ui.tr("Avbryt", "Cancel"), v -> closePanel()), lp);
+        sections.add(buttons);
+        openPanel(Ui.tr("Begär ", "Request ") + t.name + "?", sections, origin, null);
+    }
+
+    // ---- search ------------------------------------------------------------------
+    private void openSearch(View origin) {
+        android.widget.EditText field = new android.widget.EditText(this);
+        Ui.style(field, Theme.Style.TITLE, Theme.PRIMARY);
+        field.setHint(Ui.tr("Sök filmer och serier", "Search films and series"));
+        field.setHintTextColor(Glass.withAlpha(0xFFFFFF, Theme.TERTIARY));
+        field.setSingleLine();
+        field.setMinWidth(Ui.px(1100));
+        field.setPadding(Ui.px(Theme.S4), Ui.px(18), Ui.px(Theme.S4), Ui.px(18));
+        field.setBackground(new Glass(null, 0, true, 0.5f));
+        field.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
+        LinearLayout results = new LinearLayout(this);
+        results.setOrientation(LinearLayout.VERTICAL);
+        results.setClipChildren(false);
+        Runnable[] pending = new Runnable[1];
+        field.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence q, int a, int b, int c) {}
+            @Override public void onTextChanged(CharSequence q, int a, int b, int c) {}
+
+            @Override
+            public void afterTextChanged(android.text.Editable q) {
+                ui.removeCallbacks(pending[0]);
+                String term = q.toString().trim();
+                pending[0] = () -> search(term, results);
+                if (term.length() >= 2) ui.postDelayed(pending[0], 300);
+            }
+        });
+        List<View> sections = new ArrayList<>();
+        sections.add(field);
+        sections.add(results);
+        openPanel(Ui.tr("Sök", "Search"), sections, origin, null);
+    }
+
+    private void search(String term, LinearLayout results) {
+        Jellyfin source = jf;
+        Jellyseerr wishes = seerr;
+        io.execute(() -> {
+            List<Jellyfin.Item> found = new ArrayList<>();
+            List<Jellyseerr.Title> requestable = new ArrayList<>();
+            try {
+                if (source != null) found = source.search(term);
+                if (wishes != null) for (Jellyseerr.Title t : wishes.search(term)) if (t.status != Jellyseerr.AVAILABLE) requestable.add(t);
+            } catch (Exception e) {
+                Log.w("GlassHome", "search", e);
+            }
+            List<Jellyfin.Item> have = found;
+            runOnUiThread(() -> {
+                if (!results.isAttachedToWindow()) return;
+                results.removeAllViews();
+                int mw = Ui.px(352), mh = mw * 9 / 16;
+                if (have.isEmpty() && requestable.isEmpty()) {
+                    results.addView(Ui.text(this, Ui.tr("Inga träffar", "No results"), Theme.Style.BODY, Theme.SECONDARY));
+                    return;
+                }
+                if (!have.isEmpty()) {
+                    List<View> cards = new ArrayList<>();
+                    for (Jellyfin.Item it : have) cards.add(mediaCard(it, mw, mh));
+                    results.addView(grid(cards, 4));
+                }
+                if (!requestable.isEmpty()) {
+                    TextView h = Ui.text(this, Ui.tr("Kan begäras", "Can be requested"), Theme.Style.TITLE, Theme.SECONDARY);
+                    LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(-2, -2);
+                    hp.topMargin = Ui.px(Theme.S6);
+                    hp.leftMargin = Ui.px(12);
+                    results.addView(h, hp);
+                    List<View> cards = new ArrayList<>();
+                    for (Jellyseerr.Title t : requestable) cards.add(wishCard(t, mw, mh));
+                    results.addView(grid(cards, 4));
+                }
+            });
+        });
+    }
+
+    // ---- quick settings ------------------------------------------------------------
+    private Pill sleepPill, topPill;   // topPill: where Up from the app row goes
+
+    private void showSleep() {
+        long at = settings.sleepAt();
+        boolean on = at > System.currentTimeMillis();
+        sleepPill.setVisibility(on ? View.VISIBLE : View.GONE);
+        if (on) sleepPill.setText(Ui.tr("Stängs av ", "Turns off at ")
+                + android.text.format.DateFormat.getTimeFormat(this).format(new java.util.Date(at)) + Ui.tr(" · avbryt", " · cancel"));
+    }
+
+    private void openQuick(View origin) {
+        List<View> items = new ArrayList<>();
+        if (ha != null && ha.tv != null) {
+            for (int min : new int[]{30, 60, 90}) {
+                items.add(action(Ui.tr("Stäng av om " + min + " min", "Turn off in " + min + " min"), v -> {
+                    SleepReceiver.set(this, min);
+                    closePanel();
+                    showSleep();
+                }));
+            }
+            if (settings.sleepAt() > System.currentTimeMillis()) items.add(action(Ui.tr("Ingen sov-timer", "No sleep timer"), v -> {
+                SleepReceiver.set(this, 0);
+                closePanel();
+                showSleep();
+            }));
+        }
+        String[][] shortcuts = {
+                {android.provider.Settings.ACTION_BLUETOOTH_SETTINGS, Ui.tr("Bluetooth och hörlurar", "Bluetooth & headphones")},
+                {android.provider.Settings.ACTION_DISPLAY_SETTINGS, Ui.tr("Bild", "Picture")},
+                {android.provider.Settings.ACTION_SOUND_SETTINGS, Ui.tr("Ljud", "Sound")},
+                {android.provider.Settings.ACTION_WIFI_SETTINGS, Ui.tr("Nätverk", "Network")},
+                {android.provider.Settings.ACTION_SETTINGS, Ui.tr("Alla inställningar", "All settings")},
+        };
+        for (String[] sc : shortcuts) {
+            Intent i = new Intent(sc[0]).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            if (i.resolveActivity(getPackageManager()) == null) continue;   // not every TV has every settings page
+            items.add(action(sc[1], v -> {
+                closePanel();
+                startActivity(i);
+            }));
+        }
+        items.add(action(Ui.tr("Startskärmen\u2026", "Home screen\u2026"), this::openSettings));
+        List<View> sections = new ArrayList<>();
+        sections.add(grid(items, 2));
+        openPanel(Ui.tr("Snabbinställningar", "Quick settings"), sections, origin, null);
     }
 
     // ---- Home Assistant --------------------------------------------------------

@@ -37,7 +37,7 @@ class Jellyfin {
         String id, type, name, series;
         int season, episode, year;
         float progress;          // 0..1, 0 when not started
-        long remainingMin;
+        long remainingMin, positionTicks;
         boolean nextUp;
         int demoColor;           // demo mode only: colour of the generated artwork
         final List<String> images = new ArrayList<>();     // card image paths to try, best first
@@ -46,7 +46,7 @@ class Jellyfin {
         JSONObject toJson() throws JSONException {
             return new JSONObject().put("id", id).put("type", type).put("name", name).put("series", series)
                     .put("season", season).put("episode", episode).put("year", year).put("progress", progress)
-                    .put("remainingMin", remainingMin).put("nextUp", nextUp).put("demoColor", demoColor)
+                    .put("remainingMin", remainingMin).put("positionTicks", positionTicks).put("nextUp", nextUp).put("demoColor", demoColor)
                     .put("images", new JSONArray(images)).put("backdrops", new JSONArray(backdrops));
         }
 
@@ -61,6 +61,7 @@ class Jellyfin {
             it.year = o.optInt("year");
             it.progress = (float) o.optDouble("progress");
             it.remainingMin = o.optLong("remainingMin");
+            it.positionTicks = o.optLong("positionTicks");
             it.nextUp = o.optBoolean("nextUp");
             it.demoColor = o.optInt("demoColor");
             addAll(o.optJSONArray("images"), it.images);
@@ -122,6 +123,35 @@ class Jellyfin {
     }
 
     /** Newest films and series (episodes grouped into their series). */
+    /** Films and series whose name matches `term`. */
+    List<Item> search(String term) throws IOException, JSONException {
+        String q = java.net.URLEncoder.encode(term, "UTF-8");
+        JSONArray a = get("/Users/" + userId + "/Items?searchTerm=" + q + "&IncludeItemTypes=Movie,Series&Recursive=true&Limit=24" + FIELDS)
+                .getJSONArray("Items");
+        List<Item> out = new ArrayList<>();
+        for (int i = 0; i < a.length(); i++) out.add(parse(a.getJSONObject(i), false));
+        return out;
+    }
+
+    /**
+     * The Jellyfin TV app's remote-control session on this device (same model, client "Android TV"), or null.
+     * Matching the model keeps us from ever starting playback on someone else's TV.
+     */
+    String tvSession(String model) throws IOException, JSONException {
+        JSONArray a = new JSONArray(getRaw("/Sessions?ControllableByUserId=" + userId));
+        for (int i = 0; i < a.length(); i++) {
+            JSONObject s = a.getJSONObject(i);
+            if (s.optBoolean("SupportsRemoteControl") && s.optString("Client").contains("Android TV")
+                    && s.optString("DeviceName").equalsIgnoreCase(model)) return s.optString("Id");
+        }
+        return null;
+    }
+
+    /** Ask the Jellyfin app (session `sessionId`) to play `it` from where it was left. */
+    void playNow(String sessionId, Item it) throws IOException {
+        post("/Sessions/" + sessionId + "/Playing?playCommand=PlayNow&itemIds=" + it.id + "&startPositionTicks=" + it.positionTicks);
+    }
+
     List<Item> recentlyAdded() throws IOException, JSONException {
         String body = getRaw("/Users/" + userId + "/Items/Latest?Limit=16&IncludeItemTypes=Movie,Series&GroupItems=true" + FIELDS);
         JSONArray a = new JSONArray(body);
@@ -154,6 +184,7 @@ class Jellyfin {
         if (ud != null) it.progress = (float) ud.optDouble("PlayedPercentage", 0) / 100f;
         long run = o.optLong("RunTimeTicks"), pos = ud != null ? ud.optLong("PlaybackPositionTicks") : 0;
         it.remainingMin = Math.max(0, (run - pos) / 600_000_000L);
+        it.positionTicks = pos;
         JSONObject tags = o.optJSONObject("ImageTags");
         boolean primary = tags != null && tags.has("Primary"), thumb = tags != null && tags.has("Thumb");
         JSONArray backdrops = o.optJSONArray("BackdropImageTags");
@@ -211,6 +242,21 @@ class Jellyfin {
             byte[] b = new byte[8192];
             for (int n; (n = in.read(b)) > 0; ) buf.write(b, 0, n);
             return buf.toString("UTF-8");
+        } finally {
+            c.disconnect();
+        }
+    }
+
+    private void post(String path) throws IOException {
+        HttpURLConnection c = (HttpURLConnection) new URL(url + path).openConnection();
+        try {
+            c.setRequestMethod("POST");
+            c.setConnectTimeout(4000);
+            c.setReadTimeout(8000);
+            c.setRequestProperty("Authorization", "MediaBrowser Token=\"" + key + "\"");
+            c.setDoOutput(true);
+            c.getOutputStream().close();
+            if (c.getResponseCode() >= 300) throw new IOException("HTTP " + c.getResponseCode() + " for " + path);
         } finally {
             c.disconnect();
         }

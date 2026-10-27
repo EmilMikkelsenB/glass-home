@@ -372,6 +372,8 @@ public class SetupActivity extends Activity {
         items.add(option(isLong ? Ui.tr("Ingenting", "Nothing") : Ui.tr("Standard (som vanligt)", "Default (as usual)"), () -> done.accept(null)));
         items.add(option(Ui.tr("Öppna Hemmet", "Open Home panel"), () -> done.accept(obj("panel", "home"))));
         items.add(option(Ui.tr("Öppna Fler appar", "Open More apps"), () -> done.accept(obj("panel", "more"))));
+        items.add(option(Ui.tr("Sök", "Search"), () -> done.accept(obj("panel", "search"))));
+        items.add(option(Ui.tr("Snabbinställningar", "Quick settings"), () -> done.accept(obj("panel", "quick"))));
         items.add(option(Ui.tr("Spela/pausa", "Play/pause"), () -> done.accept(obj("media", "play_pause"))));
         items.add(option(Ui.tr("Öppna en app…", "Open an app…"), () -> pickApp(done)));
         HomeAssistant ha = HomeAssistant.load(this, settings);

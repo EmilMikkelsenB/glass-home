@@ -60,22 +60,25 @@ final class Demo {
         }
 
         @Override
+        List<Item> search(String term) {
+            List<Item> out = new ArrayList<>();
+            List<Item> all = continueWatching();
+            all.addAll(recentlyAdded());
+            for (Item it : all) {
+                String n = (it.series != null && !it.series.isEmpty() ? it.series : it.name).toLowerCase();
+                if (n.contains(term.toLowerCase())) out.add(it);
+            }
+            return out;
+        }
+
+        @Override
+        String tvSession(String model) {
+            return null;   // demo: no Jellyfin app to control
+        }
+
+        @Override
         Bitmap image(Item it, List<String> paths, int width) {
-            int h = width * 9 / 16;
-            Bitmap bm = Bitmap.createBitmap(width, h, Bitmap.Config.ARGB_8888);
-            Canvas c = new Canvas(bm);
-            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-            int dark = (it.demoColor & 0xFEFEFE) >> 1 | 0xFF000000;
-            p.setShader(new LinearGradient(0, 0, width, h, it.demoColor, dark, Shader.TileMode.CLAMP));
-            c.drawRect(0, 0, width, h, p);
-            p.setShader(null);
-            p.setColor(0x33FFFFFF);
-            c.drawCircle(width * 0.78f, h * 0.3f, h * 0.45f, p);
-            p.setColor(0xF0FFFFFF);
-            p.setTypeface(Typeface.create(Typeface.DEFAULT, 700, false));
-            p.setTextSize(h * 0.17f);
-            c.drawText(it.series != null && !it.series.isEmpty() ? it.series : it.name, width * 0.07f, h * 0.88f, p);
-            return bm;
+            return art(it.series != null && !it.series.isEmpty() ? it.series : it.name, it.demoColor, width);
         }
 
         private static Item item(String title, String type, String episode, int s, int e, float progress, long left,
@@ -95,6 +98,68 @@ final class Demo {
             it.images.add("demo");
             it.backdrops.add("demo");
             return it;
+        }
+    }
+
+    /** Generated 16:9 demo artwork: colour gradient, a soft circle and the title. */
+    static Bitmap art(String title, int colour, int width) {
+        int h = width * 9 / 16;
+        Bitmap bm = Bitmap.createBitmap(width, h, Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(bm);
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        int dark = (colour & 0xFEFEFE) >> 1 | 0xFF000000;
+        p.setShader(new LinearGradient(0, 0, width, h, colour, dark, Shader.TileMode.CLAMP));
+        c.drawRect(0, 0, width, h, p);
+        p.setShader(null);
+        p.setColor(0x33FFFFFF);
+        c.drawCircle(width * 0.78f, h * 0.3f, h * 0.45f, p);
+        p.setColor(0xF0FFFFFF);
+        p.setTypeface(Typeface.create(Typeface.DEFAULT, 700, false));
+        p.setTextSize(h * 0.17f);
+        c.drawText(title, width * 0.07f, h * 0.88f, p);
+        return bm;
+    }
+
+    static final class DemoSeerr extends Jellyseerr {
+        private final List<Title> titles = new ArrayList<>();
+
+        DemoSeerr() {
+            super("http://demo", "");
+            String[] names = {"Nordljus", "Fyrvaktaren", "Snöstorm", "Midnattssol", "Havsörn", "Granskogen"};
+            int[] colors = {0xFF1D3557, 0xFF457B9D, 0xFF6D6875, 0xFFB5838D, 0xFF2A9D8F, 0xFF264653};
+            int[] status = {0, 0, PENDING, 0, PROCESSING, AVAILABLE};
+            for (int i = 0; i < names.length; i++) {
+                Title t = new Title();
+                t.id = i + 1;
+                t.type = i % 2 == 0 ? "movie" : "tv";
+                t.name = names[i];
+                t.year = String.valueOf(2026 - i % 3);
+                t.status = status[i];
+                t.demoColor = colors[i];
+                titles.add(t);
+            }
+        }
+
+        @Override
+        List<Title> trending() {
+            return new ArrayList<>(titles);
+        }
+
+        @Override
+        List<Title> search(String term) {
+            List<Title> out = new ArrayList<>();
+            for (Title t : titles) if (t.name.toLowerCase().contains(term.toLowerCase())) out.add(t);
+            return out;
+        }
+
+        @Override
+        void request(Title t) {
+            t.status = PENDING;
+        }
+
+        @Override
+        Bitmap image(Title t, int width) {
+            return art(t.name, t.demoColor, width);
         }
     }
 
@@ -126,6 +191,7 @@ final class Demo {
             }
             chips.add("weather.home");
             media = "media_player.living";
+            tv = "media_player.living";
         }
 
         @Override

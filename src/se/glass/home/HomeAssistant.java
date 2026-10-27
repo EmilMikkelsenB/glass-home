@@ -35,6 +35,7 @@ class HomeAssistant {
     final List<String> chips = new ArrayList<>();      // small read-outs on the home screen
     final Map<String, String> names = new HashMap<>(); // optional display names, overriding HA's friendly_name
     String media;                                      // media_player shown as "now playing"
+    String tv;                                         // this TV's own media_player (sleep timer turns it off)
 
     HomeAssistant(String url, String token) {
         this.url = url.replaceAll("/+$", "");
@@ -57,6 +58,7 @@ class HomeAssistant {
                 ha.names.put(k, names.getString(k));
             }
             ha.media = o.optString("media", null);
+            ha.tv = o.optString("tv", null);
             return ha;
         } catch (IOException | JSONException e) {
             Log.w("GlassHome", "bad ha.json", e);

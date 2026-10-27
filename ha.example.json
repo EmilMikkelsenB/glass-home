@@ -10,6 +10,7 @@
   "chips": [
     "weather.home"
   ],
+  "tv": "media_player.living_room_tv",
   "names": {
     "light.living_room": "Living room"
   }

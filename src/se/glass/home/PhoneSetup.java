@@ -123,6 +123,8 @@ final class PhoneSetup {
             ha.put("chips", list(f.get("haChips")));
             if (!f.getOrDefault("haMedia", "").isEmpty()) ha.put("media", f.get("haMedia"));
             else ha.remove("media");
+            if (!f.getOrDefault("haTv", "").isEmpty()) ha.put("tv", f.get("haTv"));
+            else ha.remove("tv");
             Files.write(new File(dir, "ha.json").toPath(), ha.toString(2).getBytes(StandardCharsets.UTF_8));
         }
         JSONObject jf = readJson(new File(dir, "jellyfin.json"));
@@ -131,6 +133,12 @@ final class PhoneSetup {
             if (!f.getOrDefault("jfKey", "").isEmpty()) jf.put("apiKey", f.get("jfKey"));
             if (!f.getOrDefault("jfUser", "").isEmpty()) jf.put("userId", f.get("jfUser"));
             Files.write(new File(dir, "jellyfin.json").toPath(), jf.toString(2).getBytes(StandardCharsets.UTF_8));
+        }
+        JSONObject sr = readJson(new File(dir, "jellyseerr.json"));
+        if (!f.getOrDefault("srUrl", "").isEmpty()) {
+            sr.put("url", f.get("srUrl"));
+            if (!f.getOrDefault("srKey", "").isEmpty()) sr.put("apiKey", f.get("srKey"));
+            Files.write(new File(dir, "jellyseerr.json").toPath(), sr.toString(2).getBytes(StandardCharsets.UTF_8));
         }
         new Settings(ctx).setJellyfinUser(null);
     }
@@ -152,7 +160,8 @@ final class PhoneSetup {
 
     private String page(String message) {
         File dir = ctx.getExternalFilesDir(null);
-        JSONObject ha = readJson(new File(dir, "ha.json")), jf = readJson(new File(dir, "jellyfin.json"));
+        JSONObject ha = readJson(new File(dir, "ha.json")), jf = readJson(new File(dir, "jellyfin.json")),
+                sr = readJson(new File(dir, "jellyseerr.json"));
         String saved = Ui.tr("(sparad – lämna tomt för att behålla)", "(saved – leave empty to keep)");
         StringBuilder h = new StringBuilder();
         h.append("<!doctype html><html><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>")
@@ -175,10 +184,14 @@ final class PhoneSetup {
                 .append(area("haEntities", Ui.tr("Rutor (entity id, en per rad)", "Tiles (entity ids, one per line)"), ha.optJSONArray("entities")))
                 .append(area("haChips", Ui.tr("Uppe till höger (t.ex. weather.home)", "Top right (e.g. weather.home)"), ha.optJSONArray("chips")))
                 .append(field("haMedia", Ui.tr("Spelas nu (media_player, valfritt)", "Now playing (media_player, optional)"), ha.optString("media", ""), false))
+                .append(field("haTv", Ui.tr("Den här TV:n (media_player, för sov-timern)", "This TV (media_player, for the sleep timer)"), ha.optString("tv", ""), false))
                 .append("</section><section><h2>Jellyfin</h2>")
                 .append(field("jfUrl", Ui.tr("Adress", "Address"), jf.optString("url", "http://192.168.1.10:8096"), false))
                 .append(field("jfKey", Ui.tr("API-nyckel ", "API key ") + (jf.has("apiKey") ? saved : ""), "", true))
                 .append(field("jfUser", Ui.tr("Användar-id", "User id"), jf.optString("userId", ""), false))
+                .append("</section><section><h2>Jellyseerr</h2>")
+                .append(field("srUrl", Ui.tr("Adress", "Address"), sr.optString("url", "http://192.168.1.10:5055"), false))
+                .append(field("srKey", Ui.tr("API-nyckel ", "API key ") + (sr.has("apiKey") ? saved : ""), "", true))
                 .append("</section><button>").append(Ui.tr("Spara till TV:n", "Save to the TV")).append("</button></form></main></body></html>");
         return h.toString();
     }

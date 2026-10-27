@@ -46,7 +46,7 @@ adb -s %TV% shell settings put secure screensaver_enabled 1
 rem lets Glass Home install its own updates (the TV still asks before each one)
 adb -s %TV% shell appops set se.glass.home REQUEST_INSTALL_PACKAGES allow
 rem optional config files placed next to this script are copied to the TV
-for %%F in (ha.json buttons.json favorites.json jellyfin.json update.json) do if exist "%%F" adb -s %TV% push "%%F" /sdcard/Android/data/se.glass.home/files/
+for %%F in (ha.json buttons.json favorites.json jellyfin.json jellyseerr.json update.json) do if exist "%%F" adb -s %TV% push "%%F" /sdcard/Android/data/se.glass.home/files/
 adb -s %TV% shell input keyevent KEYCODE_HOME
 
 echo.

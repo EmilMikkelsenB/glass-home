@@ -26,13 +26,19 @@ Screenshots are from demo mode (fake data) on the built-in wallpaper.
   teach it what remote buttons do (mic, Netflix, YouTube… → open an app, a panel, a Home Assistant scene, play/pause; separate
   short and long press), choose a wallpaper.
 - **Jellyfin:** "Continue watching" and "Recently added" rows. The background turns into the film's backdrop while you browse.
-  Switch Jellyfin profile per household member.
+  Switch Jellyfin profile per household member. A "Continue watching" card resumes playback straight away (via the Jellyfin
+  app's remote-control session).
+- **Search:** one search box for your Jellyfin library, plus titles you can request.
+- **Jellyseerr (optional):** a "Wishlist" row of trending films and series with their status (requested, downloading); request one
+  from the sofa. Config in `jellyseerr.json` (see `jellyseerr.example.json`) or the phone setup page.
+- **Quick settings (⚙):** sleep timer (turns the TV off through Home Assistant, set `"tv"` in `ha.json`), Bluetooth, picture,
+  sound, network.
 - **Home Assistant:** scenes and lights grouped by room, updated live over the WebSocket API. Hold a light for brightness (◀ ▶).
   Weather in the corner, "now playing" from any media player, and notifications from automations (see below).
 - **Wallpapers:** a built-in glass gradient, or macOS Sierra / Tahoe / Tahoe beach that follows the time of day, downloaded on
   the TV from 512pixels.net when chosen (not bundled).
 - **Screensaver:** the big clock over a slow Ken Burns pan through your Jellyfin backdrops.
-- **Set up from your phone:** the TV shows a QR code to a small form for the Home Assistant / Jellyfin connection (LAN only,
+- **Set up from your phone:** the TV shows a QR code to a small form for the Home Assistant / Jellyfin / Jellyseerr connection (LAN only,
   random port + PIN, runs only while that screen is open).
 - **Updates itself:** when a new release is published here, the home screen shows "New version", with the release notes.
 - Long-press any card: move it (it wiggles; ◀ ▶), remove, hide. Languages: Swedish and English, following the TV.

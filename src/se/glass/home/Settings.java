@@ -56,6 +56,10 @@ final class Settings {
 
     /** Jellyfin user id override (profile switch); null = the one in jellyfin.json. */
     String jellyfinUser() { return p.getString("jellyfinUser", null); }
+
+    /** Sleep timer: wall-clock millis when the TV turns off, 0 = off (no version bump: nothing to rebuild). */
+    long sleepAt() { return p.getLong("sleepAt", 0); }
+    void setSleepAt(long at) { p.edit().putLong("sleepAt", at).apply(); }
     void setJellyfinUser(String id) { edit().putString("jellyfinUser", id).apply(); }
 
     /** {"KEYCODE_X": {"press": action, "long": action}} — see KeyService for actions. */
