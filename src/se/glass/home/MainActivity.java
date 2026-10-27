@@ -721,7 +721,7 @@ public class MainActivity extends Activity implements HaLive.Listener {
             runOnUiThread(() -> {
                 if (!results.isAttachedToWindow()) return;
                 results.removeAllViews();
-                int mw = Ui.px(352), mh = mw * 9 / 16;
+                int mw = Ui.px(296), mh = mw * 9 / 16;
                 if (have.isEmpty() && requestable.isEmpty()) {
                     results.addView(Ui.text(this, Ui.tr("Inga träffar", "No results"), Theme.Style.BODY, Theme.SECONDARY));
                     return;

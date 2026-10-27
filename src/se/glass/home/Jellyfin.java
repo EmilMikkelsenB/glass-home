@@ -82,7 +82,7 @@ class Jellyfin {
     final String url, key, userId;
 
     Jellyfin(String url, String key, String userId) {
-        this.url = url.replaceAll("/+$", "");
+        this.url = Ui.serverUrl(url);
         this.key = key;
         this.userId = userId;
     }

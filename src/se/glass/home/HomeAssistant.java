@@ -38,7 +38,7 @@ class HomeAssistant {
     String tv;                                         // this TV's own media_player (sleep timer turns it off)
 
     HomeAssistant(String url, String token) {
-        this.url = url.replaceAll("/+$", "");
+        this.url = Ui.serverUrl(url);
         this.token = token;
     }
 

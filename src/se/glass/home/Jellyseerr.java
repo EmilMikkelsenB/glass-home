@@ -51,7 +51,7 @@ class Jellyseerr {
     final String url, key;
 
     Jellyseerr(String url, String key) {
-        this.url = url.replaceAll("/+$", "");
+        this.url = Ui.serverUrl(url);
         this.key = key;
     }
 

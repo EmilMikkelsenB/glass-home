@@ -46,6 +46,12 @@ final class Ui {
         return Locale.getDefault().getLanguage().equals("sv") ? sv : en;
     }
 
+    /** "192.168.1.10:8096/" → "http://192.168.1.10:8096": people often type server addresses without the scheme. */
+    static String serverUrl(String u) {
+        u = u.trim().replaceAll("/+$", "");
+        return u.contains("://") ? u : "http://" + u;
+    }
+
     /** Apply a Theme text style with an opacity tier (Theme.PRIMARY/SECONDARY/TERTIARY). */
     static void style(TextView t, Theme.Style s, float alpha) {
         t.setTextSize(TypedValue.COMPLEX_UNIT_PX, px(s.size));
