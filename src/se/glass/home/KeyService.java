@@ -29,6 +29,13 @@ public class KeyService extends AccessibilityService {
     /** Set by the setup wizard while it waits for "press the button you want to set up". */
     static volatile Learner learner;
     static volatile boolean running;
+    private static volatile KeyService instance;
+
+    /** Sleep timer: lock = standby on Google TV (the TV follows over HDMI-CEC). False if the service isn't on. */
+    static boolean sleep() {
+        KeyService s = instance;
+        return s != null && s.performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN);
+    }
 
     /** Keys that are never remapped or learned: you need them to use the TV. */
     static final Set<Integer> NAVIGATION = Set.of(KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,
@@ -43,11 +50,13 @@ public class KeyService extends AccessibilityService {
     @Override
     protected void onServiceConnected() {
         running = true;
+        instance = this;
     }
 
     @Override
     public boolean onUnbind(Intent intent) {
         running = false;
+        instance = null;
         return super.onUnbind(intent);
     }
 

@@ -7,7 +7,10 @@ import android.content.Context;
 import android.content.Intent;
 import android.util.Log;
 
-/** Sleep timer: when the alarm fires, ask Home Assistant to turn this TV off (`tv` in ha.json). */
+/**
+ * Sleep timer: when the alarm fires, put the device to sleep through the button service (HDMI-CEC then turns the TV off),
+ * or, without that service, ask Home Assistant to turn this TV off (`tv` in ha.json).
+ */
 public class SleepReceiver extends BroadcastReceiver {
     /** Schedule (minutes > 0) or cancel (0) the sleep timer. */
     static void set(Context c, int minutes) {
@@ -23,6 +26,10 @@ public class SleepReceiver extends BroadcastReceiver {
     public void onReceive(Context c, Intent intent) {
         Settings s = new Settings(c);
         s.setSleepAt(0);
+        if (KeyService.sleep()) {
+            Log.i("GlassHome", "sleep timer: device to sleep");
+            return;
+        }
         HomeAssistant ha = HomeAssistant.load(c, s);
         if (ha == null || ha.tv == null) return;
         PendingResult done = goAsync();

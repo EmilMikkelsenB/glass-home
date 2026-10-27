@@ -242,6 +242,15 @@ public class MainActivity extends Activity implements HaLive.Listener {
                 && (f.getParent() == home.chips || f.getParent() == home.pills)) {
             return favRow.focusLast();   // top pills → back to the apps
         }
+        if (down && (code == KeyEvent.KEYCODE_DPAD_LEFT || code == KeyEvent.KEYCODE_DPAD_RIGHT)
+                && overlay.getVisibility() != View.VISIBLE && f != null
+                && (f.getParent() == home.chips || f.getParent() == home.pills)) {
+            // one line along the top (left pills + right chips); the default focus search drops back to the apps
+            List<View> top = topViews();
+            int i = top.indexOf(f) + (code == KeyEvent.KEYCODE_DPAD_RIGHT ? 1 : -1);
+            if (i >= 0 && i < top.size()) top.get(i).requestFocus();
+            return true;
+        }
         if (down && overlay.getVisibility() != View.VISIBLE
                 && (code == KeyEvent.KEYCODE_DPAD_DOWN || code == KeyEvent.KEYCODE_DPAD_UP)) {
             int r = home.rowOf(getCurrentFocus());
@@ -254,6 +263,8 @@ public class MainActivity extends Activity implements HaLive.Listener {
                     return true;
                 }
                 if (dir > 0) return true;
+                // Up from the apps: a pending update first (it's what needs doing), else Search/⚙
+                if (!home.expanded && updatePill.getVisibility() == View.VISIBLE) return updatePill.requestFocus();
                 if (!home.expanded && topPill != null) return topPill.requestFocus();
                 if (home.expanded) {
                     home.setExpanded(false);
@@ -262,6 +273,18 @@ public class MainActivity extends Activity implements HaLive.Listener {
             }
         }
         return super.dispatchKeyEvent(e);
+    }
+
+    /** Focusable things along the top edge, left to right. */
+    private List<View> topViews() {
+        List<View> out = new ArrayList<>();
+        for (ViewGroup g : new ViewGroup[]{home.pills, home.chips}) {
+            for (int i = 0; i < g.getChildCount(); i++) {
+                View v = g.getChildAt(i);
+                if (v.getVisibility() == View.VISIBLE && v.isFocusable()) out.add(v);
+            }
+        }
+        return out;
     }
 
     private void back() {
@@ -302,12 +325,6 @@ public class MainActivity extends Activity implements HaLive.Listener {
         if (jf != null || seerr != null) home.chips.addView(search, 0, sp);
         home.chips.addView(gear, new LinearLayout.LayoutParams(sp));
         if (topPill == null) topPill = gear;
-        // the weather chip between them isn't focusable, so the default search jumps back down to the apps
-        search.setId(View.generateViewId());
-        gear.setId(View.generateViewId());
-        search.setNextFocusRightId(gear.getId());
-        gear.setNextFocusLeftId(search.getId());
-        gear.setNextFocusRightId(gear.getId());
 
         home.pills.removeAllViews();
         updatePill = pill(0xFF0A84FF, v -> openUpdate(v));
@@ -758,7 +775,8 @@ public class MainActivity extends Activity implements HaLive.Listener {
 
     private void openQuick(View origin) {
         List<View> items = new ArrayList<>();
-        if (ha != null && ha.tv != null) {
+        if (pendingUpdate != null) items.add(action(Ui.tr("Uppdatera till " + pendingUpdate.name, "Update to " + pendingUpdate.name), this::openUpdate));
+        if (KeyService.running || (ha != null && ha.tv != null)) {
             for (int min : new int[]{30, 60, 90}) {
                 items.add(action(Ui.tr("Stäng av om " + min + " min", "Turn off in " + min + " min"), v -> {
                     SleepReceiver.set(this, min);
